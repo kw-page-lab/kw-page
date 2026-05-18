@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/kw-page/static/css/main.440cd126.css",
+    "main.js": "/kw-page/static/js/main.3457b2dd.js",
+    "static/js/453.25bd5429.chunk.js": "/kw-page/static/js/453.25bd5429.chunk.js",
+    "static/media/HollowThriller-Regular.ttf": "/kw-page/static/media/HollowThriller-Regular.8beb956615ca19daa1ea.ttf",
+    "index.html": "/kw-page/index.html",
+    "main.440cd126.css.map": "/kw-page/static/css/main.440cd126.css.map",
+    "main.3457b2dd.js.map": "/kw-page/static/js/main.3457b2dd.js.map",
+    "453.25bd5429.chunk.js.map": "/kw-page/static/js/453.25bd5429.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.440cd126.css",
+    "static/js/main.3457b2dd.js"
+  ]
+}
