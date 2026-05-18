@@ -1,16 +1,19 @@
 {
   "files": {
-    "main.css": "/kw-page/static/css/main.440cd126.css",
-    "main.js": "/kw-page/static/js/main.3457b2dd.js",
+    "main.css": "/kw-page/static/css/main.a2e0d0e3.css",
+    "main.js": "/kw-page/static/js/main.bc0b2379.js",
     "static/js/453.25bd5429.chunk.js": "/kw-page/static/js/453.25bd5429.chunk.js",
-    "static/media/HollowThriller-Regular.ttf": "/kw-page/static/media/HollowThriller-Regular.8beb956615ca19daa1ea.ttf",
+    "static/media/background_video.mp4": "/kw-page/static/media/background_video.f1a23e0e83ce7e0af001.mp4",
+    "static/media/padre_transparente.png": "/kw-page/static/media/padre_transparente.6e871fe8b466e25b39a0.png",
+    "static/media/SLNTHLN.TTF": "/kw-page/static/media/SLNTHLN.63a00acc9329a40ce3cd.TTF",
+    "static/media/logo_temp.png": "/kw-page/static/media/logo_temp.e8e41e15c4418bee74a6.png",
     "index.html": "/kw-page/index.html",
-    "main.440cd126.css.map": "/kw-page/static/css/main.440cd126.css.map",
-    "main.3457b2dd.js.map": "/kw-page/static/js/main.3457b2dd.js.map",
+    "main.a2e0d0e3.css.map": "/kw-page/static/css/main.a2e0d0e3.css.map",
+    "main.bc0b2379.js.map": "/kw-page/static/js/main.bc0b2379.js.map",
     "453.25bd5429.chunk.js.map": "/kw-page/static/js/453.25bd5429.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.440cd126.css",
-    "static/js/main.3457b2dd.js"
+    "static/css/main.a2e0d0e3.css",
+    "static/js/main.bc0b2379.js"
   ]
 }
