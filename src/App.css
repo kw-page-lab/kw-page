@@ -1,6 +1,6 @@
 @font-face {
-  font-family: 'HollowThriller';
-  src: url('./fonts/HollowThriller-Regular.ttf') format('truetype');
+  font-family: 'SLNTHLN';
+  src: url('./fonts/SLNTHLN.TTF') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
@@ -10,7 +10,7 @@
   width: 100vw;
   overflow: hidden;
   position: relative;
-  font-family: 'HollowThriller', Arial, sans-serif;
+  font-family: 'SLNTHLN', Arial, sans-serif;
 }
 
 .background-video {
@@ -74,7 +74,7 @@
   font-size: clamp(16px, 3vw, 28px);
   letter-spacing: 2px;
   text-shadow: 2px 2px 8px #000;
-  font-family: 'HollowThriller', Arial, sans-serif;
+  font-family: 'SLNTHLN', Arial, sans-serif;
   text-align: center;
   white-space: nowrap;
 }
@@ -95,7 +95,7 @@
 .loading-text {
   color: #fff;
   font-size: 4vw;
-  font-family: 'HollowThriller', Arial, sans-serif;
+  font-family: 'SLNTHLN', Arial, sans-serif;
   letter-spacing: 3px;
   text-shadow: 3px 3px 10px rgba(255, 255, 255, 0.3);
   animation: pulse 2s ease-in-out infinite;

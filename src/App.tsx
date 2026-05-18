@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import PadreImage from './components/PadreImage';
 import BottomSection from './components/BottomSection';
+import backgroundVideo from './assets/background_video.mp4';
+import padreImage from './assets/padre_transparente.png';
+import logoImage from './assets/logo_temp.png';
 
 const App = (): React.JSX.Element => {
   const [allAssetsLoaded, setAllAssetsLoaded] = useState(false);
@@ -24,18 +27,17 @@ const App = (): React.JSX.Element => {
         }, 500);
       }
     };
-
     const video = document.createElement('video');
-    video.src = '/background_video.mp4';
+    video.src = backgroundVideo;
     video.onloadeddata = incrementLoadedCount;
     video.load();
 
     const padreImg = new Image();
-    padreImg.src = '/padre_transparente.png';
+    padreImg.src = padreImage;
     padreImg.onload = incrementLoadedCount;
 
     const logoImg = new Image();
-    logoImg.src = '/logo_temp.png';
+    logoImg.src = logoImage;
     logoImg.onload = incrementLoadedCount;
 
     return () => {
@@ -49,7 +51,7 @@ const App = (): React.JSX.Element => {
     <div className="app-container">
       {!showMainContent && (
         <div className={`loading-screen ${fadeLoading ? 'fade-out' : ''}`}>
-          <div className="loading-text">Cargando...</div>
+          <div className="loading-text">cargando...</div>
         </div>
       )}
       
@@ -60,7 +62,7 @@ const App = (): React.JSX.Element => {
             loop
             muted
             className="background-video"
-            src="/background_video.mp4"
+            src={backgroundVideo}
           />
 
           <div className="overlay">
