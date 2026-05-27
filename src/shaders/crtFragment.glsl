@@ -1,7 +1,13 @@
 uniform float uTime;
 uniform sampler2D uTexture;
 uniform sampler2D uTextureChild;
+uniform sampler2D uTextureText;
 uniform float uChildVisibility;
+uniform vec2 uMagneticCenter;
+uniform float uMagneticTime;
+uniform float uMagneticIntensity;
+uniform float uMagneticBuildup;
+uniform vec2 uMagneticVelocity;
 varying vec2 vUv;
 
 // ─────────────────────────────────────────────
@@ -47,6 +53,48 @@ void main() {
   float barrel = 0.07;
   cuv *= 1.0 + barrel * dot(cuv, cuv);
   uv = cuv * 0.5 + 0.5;
+
+  // ─────────────────────────────────────────────
+  // STEP 1.5. INTERACTIVE MAGNETIC DISTORTION (Click / Hold effect)
+  // ─────────────────────────────────────────────
+  if (uMagneticIntensity > 0.0) {
+    float mDist = distance(vUv, uMagneticCenter);
+    float waveSpeed = 2.6;
+    float waveFront = mod(uMagneticTime * waveSpeed, 2.0);
+    float waveWidth = 0.24 + uMagneticBuildup * 0.10;
+
+    float buildupBoost = 1.0 + uMagneticBuildup * 5.5;
+
+    float distFromFront = mDist - waveFront;
+    if (abs(distFromFront) < waveWidth) {
+      float normDist = distFromFront / waveWidth;
+      float waveEnvelope = cos(normDist * 3.14159265 * 0.5);
+      waveEnvelope = waveEnvelope * waveEnvelope;
+
+      float waveOffset = sin(mDist * 55.0 - uMagneticTime * 35.0) * 0.022 * uMagneticIntensity * waveEnvelope * buildupBoost;
+
+      vec2 mDir = normalize(vUv - uMagneticCenter + vec2(0.0001));
+      vec2 mPerp = vec2(-mDir.y, mDir.x);
+
+      uv += mDir * waveOffset;
+      uv += mPerp * waveOffset * 0.65;
+
+      float fineStatic  = (hash(vec2(floor(vUv.y * 300.0), uTime * 4.0)) - 0.5) * 0.038 * uMagneticIntensity * waveEnvelope * buildupBoost;
+      float fineStaticY = (hash(vec2(floor(vUv.x * 300.0), uTime * 4.0 + 1.7)) - 0.5) * 0.028 * uMagneticIntensity * waveEnvelope * buildupBoost;
+      uv.x += fineStatic;
+      uv.y += fineStaticY;
+    }
+  }
+
+  if (uMagneticIntensity > 0.0) {
+    float velLen = length(uMagneticVelocity);
+    if (velLen > 0.001) {
+      float velEffect = min(velLen, 1.0) * uMagneticIntensity;
+      uv += uMagneticVelocity * velEffect * 0.055;
+      float hSmear = (hash(vec2(floor(vUv.y * 180.0), uTime * 5.0)) - 0.5) * velEffect * 0.07;
+      uv.x += hSmear;
+    }
+  }
 
   // Kill pixels outside the barrel-distorted frame
   float inFrame = step(0.0, uv.x) * step(uv.x, 1.0) *
@@ -244,6 +292,28 @@ void main() {
   vec3 screenContent = mix(phosphorBase, figureAsPhosphor, softAlpha * 0.95);
 
   // ─────────────────────────────────────────────
+  // STEP 13.5. PHOSPHORESCENT GREEN TEXT OVERLAY (top-left screen mapping with chroma aberration)
+  // ─────────────────────────────────────────────
+  vec2 txtUvR = clamp(uv + chromaShiftR, 0.0, 1.0);
+  vec2 txtUvG = clamp(uv, 0.0, 1.0);
+  vec2 txtUvB = clamp(uv + chromaShiftB, 0.0, 1.0);
+  
+  float txtA_R = texture2D(uTextureText, txtUvR).a;
+  float txtA_G = texture2D(uTextureText, txtUvG).a;
+  float txtA_B = texture2D(uTextureText, txtUvB).a;
+  
+  if (txtA_R > 0.01 || txtA_G > 0.01 || txtA_B > 0.01) {
+    vec3 textPhosphor = vec3(0.22, 1.0, 0.08) * (lumaNoise * 0.45 + 0.75) * 5.0;
+    vec3 textCol = vec3(
+      textPhosphor.r * txtA_R,
+      textPhosphor.g * txtA_G,
+      textPhosphor.b * txtA_B
+    );
+    float textAlpha = max(max(txtA_R, txtA_G), txtA_B);
+    screenContent = mix(screenContent, textCol, textAlpha * inFrame);
+  }
+
+  // ─────────────────────────────────────────────
   // STEP 14. IRREGULAR SCANLINES
   // Variable opacity, variable thickness, small breaks
   // ─────────────────────────────────────────────
@@ -319,6 +389,35 @@ void main() {
   // ─────────────────────────────────────────────
   float sigLoss = step(0.993, hash(vec2(floor(uTime * 1.7), floor(uv.y * 40.0))));
   screenContent = mix(screenContent, vec3(lumaNoise * 0.3), sigLoss * 0.6);
+
+  // ─────────────────────────────────────────────
+  // STEP 21. MAGNETIC RAINBOW GLITCH (buildup hold effect)
+  // ─────────────────────────────────────────────
+  if (uMagneticBuildup > 0.12 && uMagneticIntensity > 0.0) {
+    float rDist    = distance(vUv, uMagneticCenter);
+    float rFront   = mod(uMagneticTime * 2.6, 2.0);
+    float rWidth   = 0.30 + uMagneticBuildup * 0.12;
+    float rFromFront = rDist - rFront;
+
+    if (abs(rFromFront) < rWidth) {
+      float rNorm = rFromFront / rWidth;
+      float rEnv  = cos(rNorm * 3.14159265 * 0.5);
+      rEnv = rEnv * rEnv;
+
+      vec2 rDir = normalize(vUv - uMagneticCenter + vec2(0.0001));
+      float angle = atan(rDir.y, rDir.x) / 6.2831853 + 0.5;
+
+      float h  = fract(angle * 2.5 + rDist * 4.0 - uMagneticTime * 1.8);
+      float ri = clamp(abs(h * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+      float gi = clamp(2.0 - abs(h * 6.0 - 2.0), 0.0, 1.0);
+      float bi = clamp(2.0 - abs(h * 6.0 - 4.0), 0.0, 1.0);
+      vec3 rainbow = vec3(ri, gi, bi) * (lumaNoise * 0.35 + 0.72);
+
+      float buildupFactor  = smoothstep(0.12, 0.75, uMagneticBuildup);
+      float rainbowStrength = buildupFactor * rEnv * uMagneticIntensity * 0.92;
+      screenContent = mix(screenContent, rainbow, clamp(rainbowStrength, 0.0, 0.9));
+    }
+  }
 
   // ─────────────────────────────────────────────
   // KILL outside barrel frame

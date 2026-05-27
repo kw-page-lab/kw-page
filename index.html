@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sixtyfour&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
   <style>
     @font-face {
@@ -161,6 +162,64 @@
       opacity: 0.80;
     }
 
+    #kw-credits {
+      color: rgba(255, 255, 255, 0.5);
+      font-family: SLNTHLN, Arial, sans-serif;
+      font-size: clamp(9px, 1.4vw, 13px);
+      font-weight: 100;
+      font-synthesis: none;
+      letter-spacing: 2px;
+      text-align: center;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+      white-space: nowrap;
+      margin: 0;
+    }
+
+    #kw-credits a {
+      color: rgba(255, 255, 255, 0.85);
+      text-decoration: none;
+      pointer-events: auto;
+      transition: color 0.3s ease, text-shadow 0.3s ease;
+    }
+
+    #kw-credits a:hover {
+      color: #3b82f6;
+      text-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+    }
+
+    .kw-glitch-active {
+      position: relative;
+      color: #ff3b30 !important;
+      text-shadow: 
+        -2px 0 0 #00ffff,
+        2px 0 0 #ff00ff,
+        0 0 8px rgba(255, 59, 48, 0.8) !important;
+      animation: kwGlitchAnim 0.2s infinite steps(2), kwJitterAnim 0.1s infinite !important;
+      display: inline-block;
+    }
+
+    @keyframes kwGlitchAnim {
+      0% {
+        text-shadow: -2px 0 0 #00ffff, 2px 0 0 #ff00ff, 0 0 8px rgba(255, 59, 48, 0.8);
+      }
+      50% {
+        text-shadow: 2px 0 0 #00ffff, -2px 0 0 #ff00ff, 0 0 4px rgba(255, 59, 48, 0.5);
+      }
+    }
+
+    @keyframes kwJitterAnim {
+      0%, 100% { transform: translate(0, 0); }
+      10% { transform: translate(-0.5px, -0.5px); }
+      20% { transform: translate(0.5px, 0.5px); }
+      30% { transform: translate(-1px, 0); }
+      40% { transform: translate(0.8px, -0.3px); }
+      50% { transform: translate(-0.5px, 0.5px); }
+      60% { transform: translate(1px, 0.3px); }
+      70% { transform: translate(-0.8px, -0.5px); }
+      80% { transform: translate(0.5px, -0.8px); }
+      90% { transform: translate(-0.3px, 1px); }
+    }
+
     @media (max-width: 768px) {
       #top-overlay {
         top: 2vh;
@@ -179,6 +238,10 @@
       #kw-tagline {
         font-size: clamp(11px, 4vw, 16px);
         letter-spacing: 2px;
+      }
+      #kw-credits {
+        font-size: clamp(8px, 2.8vw, 11px);
+        letter-spacing: 1.5px;
       }
     }
   </style>
@@ -206,9 +269,63 @@
       <img id="kw-logo" src="/logo.png" alt="Kimeraware" draggable="false">
     </a>
     <p id="kw-tagline">PROXIMAMENTE...</p>
+    <p id="kw-credits">WebPage By <a href="https://macrostasis.dev" target="_blank" rel="noopener noreferrer">MetaCodeX</a></p>
   </div>
 
   <script type="module" src="/src/main.js"></script>
+  <script>
+    (function() {
+      const link = document.querySelector('#kw-credits a');
+      if (!link) return;
+      
+      const startTime = Date.now();
+      let isMacrostasis = false;
+      
+      function updateCredits() {
+        const now = Date.now();
+        // Bloquear durante los primeros 30 segundos (30000 ms) tras la carga de la página
+        if (now - startTime < 30000) {
+          if (isMacrostasis) {
+            isMacrostasis = false;
+            link.textContent = 'MetaCodeX';
+            link.classList.remove('kw-glitch-active');
+          }
+          link.href = "https://macrostasis.dev";
+          return;
+        }
+
+        const nowSec = new Date().getSeconds();
+        // Activo por los primeros 5 segundos de cada minuto (0, 1, 2, 3, 4)
+        const shouldBeMacro = (nowSec >= 0 && nowSec < 5);
+        
+        if (shouldBeMacro !== isMacrostasis) {
+          isMacrostasis = shouldBeMacro;
+          if (isMacrostasis) {
+            link.textContent = 'MacroStasis';
+            link.classList.add('kw-glitch-active');
+            link.removeAttribute('href'); // Evitar que el clic navegue
+          } else {
+            link.textContent = 'MetaCodeX';
+            link.classList.remove('kw-glitch-active');
+            link.href = "https://macrostasis.dev";
+          }
+        }
+      }
+      
+      // Capturar clic para el easter egg
+      link.addEventListener('click', function(e) {
+        if (isMacrostasis) {
+          e.preventDefault();
+          if (window.triggerEasterEgg) {
+            window.triggerEasterEgg();
+          }
+        }
+      });
+      
+      setInterval(updateCredits, 200);
+      updateCredits();
+    })();
+  </script>
   <!-- Fun is Infinite with Sega Enterprises (1/7) -->
 </body>
 </html>

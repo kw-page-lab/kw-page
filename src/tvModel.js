@@ -144,7 +144,13 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
           uTime: { value: 0 },
           uTexture: { value: crtTexture },
           uTextureChild: { value: childTexture },
-          uChildVisibility: { value: 0.0 }
+          uTextureText: { value: null },
+          uChildVisibility: { value: 0.0 },
+          uMagneticCenter: { value: new THREE.Vector2(-10.0, -10.0) },
+          uMagneticTime: { value: 0.0 },
+          uMagneticIntensity: { value: 0.0 },
+          uMagneticBuildup: { value: 0.0 },
+          uMagneticVelocity: { value: new THREE.Vector2(0.0, 0.0) }
         }
       });
 
@@ -185,8 +191,113 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
       spotTarget.position.set(0, 1.30, 12.0);
       spotlight.target = spotTarget;
 
+      let _isHolding = false;
+      let _buildupTime = 0.0;
+      const MAX_BUILDUP = 3.5;
+      const BURST_DUR = 0.22;
+      let _releaseIntensity = 0.0;
+      let _decayDuration = 0.0;
+      let _decayElapsed = 0.0;
+      let _velX = 0.0;
+      let _velY = 0.0;
+      let _velocityBoost = 0.0;
+
+      const startMagneticHold = (uv) => {
+        _isHolding = true;
+        _buildupTime = crtMaterial.uniforms.uMagneticBuildup.value * MAX_BUILDUP;
+        _decayDuration = 0.0;
+        _decayElapsed = 0.0;
+        crtMaterial.uniforms.uMagneticCenter.value.copy(uv);
+      };
+
+      const stopMagneticHold = () => {
+        if (!_isHolding) return;
+        _isHolding = false;
+        _releaseIntensity = crtMaterial.uniforms.uMagneticBuildup.value;
+        _decayDuration = 1.5 + _releaseIntensity * 9.0;
+        _decayElapsed = -BURST_DUR;
+      };
+
+      const setVelocityBoost = (dvx, dvy) => {
+        const speed = Math.sqrt(dvx * dvx + dvy * dvy);
+        _velocityBoost = Math.min(speed * 12.0, 0.6);
+        _velX = dvx * 8.0;
+        _velY = dvy * 8.0;
+      };
+
       const update = (elapsedTime, deltaTime) => {
         crtMaterial.uniforms.uTime.value = elapsedTime;
+
+        _velocityBoost = Math.max(_velocityBoost - deltaTime * 5.0, 0.0);
+        _velX *= Math.max(1.0 - deltaTime * 6.0, 0.0);
+        _velY *= Math.max(1.0 - deltaTime * 6.0, 0.0);
+
+        if (_isHolding) {
+          _buildupTime = Math.min(_buildupTime + deltaTime, MAX_BUILDUP);
+          const buildupFrac = _buildupTime / MAX_BUILDUP;
+          crtMaterial.uniforms.uMagneticIntensity.value = Math.min(0.15 + buildupFrac * 0.85 + _velocityBoost * 0.4, 1.3);
+          crtMaterial.uniforms.uMagneticBuildup.value = buildupFrac;
+          crtMaterial.uniforms.uMagneticTime.value += deltaTime;
+          crtMaterial.uniforms.uMagneticVelocity.value.set(_velX, _velY);
+
+          const shakeAmp = Math.min(buildupFrac * 0.032, 0.032);
+          if (shakeAmp > 0.001) {
+            tvGroup.position.set(
+              (Math.random() - 0.5) * shakeAmp,
+              (Math.random() - 0.5) * shakeAmp,
+              12.0 + (Math.random() - 0.5) * shakeAmp
+            );
+          } else {
+            tvGroup.position.set(0.0, 0.0, 12.0);
+          }
+
+        } else if (_decayDuration > 0.0) {
+          _decayElapsed += deltaTime;
+          crtMaterial.uniforms.uMagneticTime.value += deltaTime;
+          crtMaterial.uniforms.uMagneticVelocity.value.set(0.0, 0.0);
+
+          if (_decayElapsed < 0.0) {
+            const burstT = (_decayElapsed + BURST_DUR) / BURST_DUR;
+            const burstPeak = Math.sin(burstT * Math.PI) * 0.55;
+            const burstVal = Math.min(_releaseIntensity + burstPeak, 1.4);
+            crtMaterial.uniforms.uMagneticIntensity.value = burstVal;
+            crtMaterial.uniforms.uMagneticBuildup.value = burstVal;
+            tvGroup.position.set(0.0, 0.0, 12.0);
+
+          } else {
+            const t = Math.min(_decayElapsed / _decayDuration, 1.0);
+            const easeT = 1.0 - t * t;
+            const current = _releaseIntensity * easeT;
+
+            if (current <= 0.001 || t >= 1.0) {
+              crtMaterial.uniforms.uMagneticIntensity.value = 0.0;
+              crtMaterial.uniforms.uMagneticBuildup.value = 0.0;
+              _decayDuration = 0.0;
+              tvGroup.position.set(0.0, 0.0, 12.0);
+            } else {
+              crtMaterial.uniforms.uMagneticIntensity.value = current;
+              crtMaterial.uniforms.uMagneticBuildup.value = current;
+              const shakeAmp = current * 0.032;
+              tvGroup.position.set(
+                (Math.random() - 0.5) * shakeAmp,
+                (Math.random() - 0.5) * shakeAmp,
+                12.0 + (Math.random() - 0.5) * shakeAmp
+              );
+            }
+          }
+
+        } else {
+          crtMaterial.uniforms.uMagneticVelocity.value.set(0.0, 0.0);
+          if (inTransition) {
+            tvGroup.position.set(
+              (Math.random() - 0.5) * 0.012,
+              (Math.random() - 0.5) * 0.012,
+              12.0 + (Math.random() - 0.5) * 0.012
+            );
+          } else {
+            tvGroup.position.set(0.0, 0.0, 12.0);
+          }
+        }
 
         updateScreenManager(crtMaterial.uniforms, elapsedTime, deltaTime);
 
@@ -194,14 +305,7 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
 
         internalCabinetLight.intensity = (10.0 + Math.sin(elapsedTime * 22.0) * 0.8 + Math.sin(elapsedTime * 4.0) * 0.25);
 
-        if (inTransition) {
-          const shakeX = (Math.random() - 0.5) * 0.012;
-          const shakeY = (Math.random() - 0.5) * 0.012;
-          const shakeZ = (Math.random() - 0.5) * 0.012;
-          tvModel.position.set(-scaledCenter.x + shakeX, -scaledBox.min.y + shakeY, -scaledCenter.z + shakeZ);
-        } else {
-          tvModel.position.set(-scaledCenter.x, -scaledBox.min.y, -scaledCenter.z);
-        }
+        tvModel.position.set(-scaledCenter.x, -scaledBox.min.y, -scaledCenter.z);
       };
 
       const destroy = () => {
@@ -217,7 +321,10 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
         crtLight,
         internalCabinetLight,
         update,
-        destroy
+        destroy,
+        startMagneticHold,
+        stopMagneticHold,
+        setVelocityBoost
       };
     });
 }
