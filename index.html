@@ -244,7 +244,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-BxbkWtoM.js"></script>
+  <script type="module" crossorigin src="/assets/index-DG7847wq.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-Bv4oKDlK.css">
 </head>
 <body>
@@ -270,13 +270,16 @@
       <img id="kw-logo" src="/logo.png" alt="Kimeraware" draggable="false">
     </a>
     <p id="kw-tagline">PROXIMAMENTE...</p>
-    <p id="kw-credits">WebPage By <a href="https://macrostasis.dev" target="_blank" rel="noopener noreferrer">MetaCodeX</a></p>
+    <p id="kw-credits">WebPage By <a target="_blank" rel="noopener noreferrer"></a></p>
   </div>
 
   <script>
     (function() {
       function dec(hex) {
-        const key = 'kw';
+        let key = 'kw';
+        if (key.startsWith('%') && key.endsWith('%')) {
+          key = 'kw';
+        }
         let res = '';
         for (let i = 0; i < hex.length; i += 2) {
           const byte = parseInt(hex.substring(i, i + 2), 16);
@@ -288,6 +291,10 @@
 
       const link = document.querySelector('#kw-credits a');
       if (!link) return;
+
+      // Populate credit values dynamically to keep them encrypted in raw markup
+      link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
+      link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
       
       const startTime = Date.now();
       let isMacrostasis = false;
@@ -338,6 +345,14 @@
       updateCredits();
     })();
   </script>
-  <!-- Fun is Infinite with Sega Enterprises (1/7) -->
+  <div style="display: none;" id="kw-hints" aria-hidden="true">
+    <!-- Fun is Infinite with Sega Enterprises (1/7) -->
+    <!-- eres mas curioso que yo eh? veamos que mas lejos puedes llegar (2/7) -->
+    <!-- METACODEX=MACROSTASIS=METACODEX=MACROSTASIS (3/7) -->
+    <!-- Excuse me, sir, there must be someone you've confused me for (4/7) -->
+    <!-- REJECTED FALSE ICONS (5/7) -->
+    <!-- EL Psy Koongro (6/7) -->
+    <!-- KIng Yellow (7/7) -->
+  </div>
 </body>
 </html>
