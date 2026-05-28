@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+// Fun is Infinite with Sega Enterprises (1/7)
+
 function dec(hex) {
   const key = 'kw';
   let res = '';
@@ -464,3 +466,5 @@ export function destroyScreenManager() {
   textTexture.dispose();
   if (videoTexture) videoTexture.dispose();
 }
+
+// KIng Yellow (7/7)

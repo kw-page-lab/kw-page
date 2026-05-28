@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+// METACODEX=MACROSTASIS=METACODEX=MACROSTASIS (3/7)
+
 export const DESIGN = {
   bgColor: 0x030303,
   floorColor: 0x4f4f4f,

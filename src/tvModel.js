@@ -5,6 +5,9 @@ import crtFragmentShader from './shaders/crtFragment.glsl?raw';
 import { setMilestone } from './loader.js';
 import { loadScreenAssets, updateScreenManager, inTransition, destroyScreenManager } from './screenManager.js';
 
+// Excuse me, sir, there must be someone you've confused me for (4/7)
+// REJECTED FALSE ICONS (5/7)
+
 const getMeshBoundingBox = (object) => {
   const box = new THREE.Box3();
   let hasMesh = false;

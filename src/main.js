@@ -7,6 +7,7 @@ import { loadTV } from './tvModel.js';
 import { initCameraDrift } from './camera.js';
 import { milestoneComplete, finishLoading } from './loader.js';
 
+// eres mas curioso que yo eh? veamos que mas lejos puedes llegar (2/7)
 const canvas = document.getElementById('webgl-canvas');
 const container = document.getElementById('app-container');
 
