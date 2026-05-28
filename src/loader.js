@@ -1,5 +1,3 @@
-// KIng Yellow (7/7)
-
 const splash      = document.getElementById('loading-splash');
 const barFill     = document.getElementById('loading-bar-fill');
 const loadingText = document.getElementById('loading-text');

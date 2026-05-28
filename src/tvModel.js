@@ -5,9 +5,6 @@ import crtFragmentShader from './shaders/crtFragment.glsl?raw';
 import { setMilestone } from './loader.js';
 import { loadScreenAssets, updateScreenManager, inTransition, destroyScreenManager } from './screenManager.js';
 
-// Excuse me, sir, there must be someone you've confused me for (4/7)
-// REJECTED FALSE ICONS (5/7)
-
 const getMeshBoundingBox = (object) => {
   const box = new THREE.Box3();
   let hasMesh = false;
@@ -26,6 +23,47 @@ const getMeshBoundingBox = (object) => {
   
   return box;
 };
+
+function dec(hex) {
+  const key = 'kw';
+  let res = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.substring(i, i + 2), 16);
+    const keyChar = key.charCodeAt((i / 2) % key.length);
+    res += String.fromCharCode(byte ^ keyChar);
+  }
+  return res;
+}
+
+async function loadEncryptedAsset(url, mimeType, textureLoader) {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const view = new Uint8Array(buffer);
+  const key = [0x4b, 0x57, 0x5f, 0x41, 0x52, 0x47]; // "KW_ARG"
+  for (let i = 0; i < view.length; i++) {
+    view[i] ^= key[i % key.length];
+  }
+  const blob = new Blob([view], { type: mimeType });
+  const blobUrl = URL.createObjectURL(blob);
+  
+  return new Promise((resolve, reject) => {
+    textureLoader.load(
+      blobUrl,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        URL.revokeObjectURL(blobUrl);
+        resolve(tex);
+      },
+      undefined,
+      (err) => {
+        URL.revokeObjectURL(blobUrl);
+        reject(err);
+      }
+    );
+  });
+}
 
 export function loadTV(scene, controls, spotlight, spotTarget) {
   const gltfLoader = new GLTFLoader();
@@ -53,41 +91,25 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
     );
   });
 
-  const texture1Promise = new Promise((resolve, reject) => {
-    textureLoader.load(
-      '/padre_transparente.webp',
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        setMilestone('texture1', 10);
-        resolve(tex);
-      },
-      undefined,
-      (err) => {
-        console.error('Error loading texture 1:', err);
-        reject(err);
-      }
-    );
-  });
+  const texture1Promise = loadEncryptedAsset(dec('4407340345130a03'), 'image/webp', textureLoader)
+    .then((tex) => {
+      setMilestone('texture1', 10);
+      return tex;
+    })
+    .catch((err) => {
+      console.error('Error loading texture 1:', err);
+      throw err;
+    });
 
-  const texture2Promise = new Promise((resolve, reject) => {
-    textureLoader.load(
-      '/silueta_recortada_precisa.webp',
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        setMilestone('texture2', 10);
-        resolve(tex);
-      },
-      undefined,
-      (err) => {
-        console.error('Error loading texture 2:', err);
-        reject(err);
-      }
-    );
-  });
+  const texture2Promise = loadEncryptedAsset(dec('4404340545130a03'), 'image/webp', textureLoader)
+    .then((tex) => {
+      setMilestone('texture2', 10);
+      return tex;
+    })
+    .catch((err) => {
+      console.error('Error loading texture 2:', err);
+      throw err;
+    });
 
   return Promise.all([modelPromise, texture1Promise, texture2Promise])
     .then(([gltf, crtTexture, childTexture]) => {

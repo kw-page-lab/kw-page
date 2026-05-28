@@ -1,14 +1,52 @@
 import * as THREE from 'three';
-import { setMilestone } from './loader.js';
 
-// Fun is Infinite with Sega Enterprises (1/7)
+function dec(hex) {
+  const key = 'kw';
+  let res = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.substring(i, i + 2), 16);
+    const keyChar = key.charCodeAt((i / 2) % key.length);
+    res += String.fromCharCode(byte ^ keyChar);
+  }
+  return res;
+}
+
+async function loadEncryptedAsset(url, mimeType, loader) {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const view = new Uint8Array(buffer);
+  const key = [0x4b, 0x57, 0x5f, 0x41, 0x52, 0x47]; // "KW_ARG"
+  for (let i = 0; i < view.length; i++) {
+    view[i] ^= key[i % key.length];
+  }
+  const blob = new Blob([view], { type: mimeType });
+  const blobUrl = URL.createObjectURL(blob);
+  
+  return new Promise((resolve, reject) => {
+    loader.load(
+      blobUrl,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        URL.revokeObjectURL(blobUrl);
+        resolve(tex);
+      },
+      undefined,
+      (err) => {
+        URL.revokeObjectURL(blobUrl);
+        reject(err);
+      }
+    );
+  });
+}
 
 export const CONFIG = {
   mode: 'default',
 
   slideshow: {
     images: [
-      '/padre_transparente.webp',
+      dec('4407340345130a03'),
     ],
     slideDuration: 12.0,
     transitionDuration: 0.45,
@@ -73,7 +111,7 @@ export function triggerEasterEgg() {
   easterEggTimer = 0.0;
   inTransition = true;
 }
-window.triggerEasterEgg = triggerEasterEgg;
+window[dec('1f0502100c1219320a041f1219320c10')] = triggerEasterEgg;
 
 function drawNoiseOnCanvas() {
   const imgData = ctx.createImageData(canvas.width, canvas.height);
@@ -114,28 +152,20 @@ export function loadScreenAssets(loaderText1, loaderText2) {
 
   // Load the Eye Sigil texture for the easter egg
   promises.push(
-    new Promise((resolve) => {
-      textureLoader.load(
-        '/Eye_Sigil.png',
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.minFilter = THREE.LinearFilter;
-          tex.generateMipmaps = false;
-          eyeSigilTexture = tex;
-          resolve(tex);
-        },
-        undefined,
-        () => {
-          console.error('Failed to load Eye Sigil texture');
-          resolve(null);
-        }
-      );
-    })
+    loadEncryptedAsset(dec('4412340445130a03'), 'image/png', textureLoader)
+      .then((tex) => {
+        eyeSigilTexture = tex;
+        return tex;
+      })
+      .catch((err) => {
+        console.error('Failed to load Eye Sigil texture:', err);
+        return null;
+      })
   );
 
   if (CONFIG.mode === 'slideshow') {
     CONFIG.slideshow.images.forEach((src) => {
-      if (src === '/padre_transparente.webp') {
+      if (src === dec('4407340345130a03')) {
         loadedSlideTextures[src] = defaultTexture;
         return;
       }
@@ -276,7 +306,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
     
     // Draw green text in top-left: CH MTCDX for first 2 seconds, then hide text for the remaining 5 seconds
     if (easterEggTimer <= 2.0) {
-      updateTextTexture('CH MTCDX');
+      updateTextTexture(dec('283f4b3a3f342f2f'));
     } else {
       updateTextTexture('');
     }
@@ -323,7 +353,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
     // Only draw CH KW if the post-easter egg timer is active
     if (postEasterEggTimer > 0.0) {
       postEasterEggTimer -= deltaTime;
-      updateTextTexture('CH KW');
+      updateTextTexture(dec('283f4b3c3c'));
     } else {
       updateTextTexture('');
     }
@@ -349,7 +379,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
     const images = CONFIG.slideshow.images;
     if (images.length <= 1) {
       inTransition = false;
-      const singleSlideUrl = images[0] || '/padre_transparente.webp';
+      const singleSlideUrl = images[0] || dec('4407340345130a03');
       
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const slideTex = loadedSlideTextures[singleSlideUrl] || defaultTexture;
@@ -360,7 +390,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
       // Only draw CH KW if the post-easter egg timer is active
       if (postEasterEggTimer > 0.0) {
         postEasterEggTimer -= deltaTime;
-        updateTextTexture('CH KW');
+        updateTextTexture(dec('283f4b3c3c'));
       } else {
         updateTextTexture('');
       }
@@ -368,7 +398,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
       canvasTexture.needsUpdate = true;
       uniforms.uTexture.value = canvasTexture;
 
-      if (singleSlideUrl.includes('padre_transparente')) {
+      if (singleSlideUrl === dec('4407340345130a03')) {
         uniforms.uTextureChild.value = childTexture;
         uniforms.uChildVisibility.value = updateChildVisibility(elapsedTime);
       } else {
@@ -401,7 +431,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
       // Only draw CH KW if the post-easter egg timer is active
       if (postEasterEggTimer > 0.0) {
         postEasterEggTimer -= deltaTime;
-        updateTextTexture('CH KW');
+        updateTextTexture(dec('283f4b3c3c'));
       } else {
         updateTextTexture('');
       }
@@ -409,7 +439,7 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
       canvasTexture.needsUpdate = true;
       uniforms.uTexture.value = canvasTexture;
 
-      if (currentSlideUrl.includes('padre_transparente')) {
+      if (currentSlideUrl === dec('4407340345130a03')) {
         uniforms.uTextureChild.value = childTexture;
         uniforms.uChildVisibility.value = updateChildVisibility(elapsedTime);
       } else {
@@ -434,5 +464,3 @@ export function destroyScreenManager() {
   textTexture.dispose();
   if (videoTexture) videoTexture.dispose();
 }
-
-// KIng Yellow (7/7)
