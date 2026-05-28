@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 
-// Fun is Infinite with Sega Enterprises (1/7)
-
 function dec(hex) {
   const key = import.meta.env.VITE_XOR_KEY_STRING || 'kw';
   let res = '';
@@ -468,4 +466,4 @@ export function destroyScreenManager() {
   if (videoTexture) videoTexture.dispose();
 }
 
-// KIng Yellow (7/7)
+/*! REJECTED FALSE ICONS (5/7) */

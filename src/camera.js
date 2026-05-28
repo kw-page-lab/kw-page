@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-// EL Psy Koongro (6/7)
+/*! EL Psy Koongro (6/7) */
 
 export function initCameraDrift(camera, controls, canvas) {
   let lastInteractionTime = -10.0;
