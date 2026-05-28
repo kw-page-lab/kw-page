@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // Fun is Infinite with Sega Enterprises (1/7)
 
 function dec(hex) {
-  const key = 'kw';
+  const key = import.meta.env.VITE_XOR_KEY_STRING || 'kw';
   let res = '';
   for (let i = 0; i < hex.length; i += 2) {
     const byte = parseInt(hex.substring(i, i + 2), 16);
@@ -17,7 +17,8 @@ async function loadEncryptedAsset(url, mimeType, loader) {
   const response = await fetch(url);
   const buffer = await response.arrayBuffer();
   const view = new Uint8Array(buffer);
-  const key = [0x4b, 0x57, 0x5f, 0x41, 0x52, 0x47]; // "KW_ARG"
+  const keyStr = import.meta.env.VITE_XOR_KEY_BYTES || '75,87,95,65,82,71';
+  const key = keyStr.split(',').map(Number);
   for (let i = 0; i < view.length; i++) {
     view[i] ^= key[i % key.length];
   }
