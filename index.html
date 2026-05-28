@@ -244,7 +244,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-BksYfgCC.js"></script>
+  <script type="module" crossorigin src="/assets/index-BxbkWtoM.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-Bv4oKDlK.css">
 </head>
 <body>
@@ -275,6 +275,17 @@
 
   <script>
     (function() {
+      function dec(hex) {
+        const key = 'kw';
+        let res = '';
+        for (let i = 0; i < hex.length; i += 2) {
+          const byte = parseInt(hex.substring(i, i + 2), 16);
+          const keyChar = key.charCodeAt((i / 2) % key.length);
+          res += String.fromCharCode(byte ^ keyChar);
+        }
+        return res;
+      }
+
       const link = document.querySelector('#kw-credits a');
       if (!link) return;
       
@@ -287,10 +298,10 @@
         if (now - startTime < 30000) {
           if (isMacrostasis) {
             isMacrostasis = false;
-            link.textContent = 'MetaCodeX';
-            link.classList.remove('kw-glitch-active');
+            link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
+            link.classList.remove(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
           }
-          link.href = "https://macrostasis.dev";
+          link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
           return;
         }
 
@@ -301,13 +312,13 @@
         if (shouldBeMacro !== isMacrostasis) {
           isMacrostasis = shouldBeMacro;
           if (isMacrostasis) {
-            link.textContent = 'MacroStasis';
-            link.classList.add('kw-glitch-active');
+            link.textContent = dec('2616080504241f16181e18'); // 'MacroStasis'
+            link.classList.add(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
             link.removeAttribute('href'); // Evitar que el clic navegue
           } else {
-            link.textContent = 'MetaCodeX';
-            link.classList.remove('kw-glitch-active');
-            link.href = "https://macrostasis.dev";
+            link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
+            link.classList.remove(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
+            link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
           }
         }
       }
@@ -316,8 +327,9 @@
       link.addEventListener('click', function(e) {
         if (isMacrostasis) {
           e.preventDefault();
-          if (window.triggerEasterEgg) {
-            window.triggerEasterEgg();
+          const triggerFn = window[dec('1f0502100c1219320a041f1219320c10')]; // 'triggerEasterEgg'
+          if (triggerFn) {
+            triggerFn();
           }
         }
       });
@@ -326,6 +338,5 @@
       updateCredits();
     })();
   </script>
-  <!-- Fun is Infinite with Sega Enterprises (1/7) -->
 </body>
 </html>
