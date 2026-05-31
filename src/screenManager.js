@@ -105,6 +105,19 @@ const ensureProxiedUrl = (url) => {
           }
         } catch (e) {}
       }
+      
+      // Do not proxy if it's already a CORS-friendly public proxy/instance or contains local=true
+      if (
+        url.includes('local=true') || 
+        url.includes('piped') || 
+        url.includes('cobalt') || 
+        url.includes('invidious') || 
+        url.includes('yewtu.be') || 
+        url.includes('nadeko.net')
+      ) {
+        shouldProxy = false;
+      }
+      
       if (shouldProxy) {
         finalUrl = getApiUrl(`/api/yt-proxy?url=${encodeURIComponent(url)}`);
       }
@@ -1243,7 +1256,7 @@ async function resolveYouTubeStreamUrl(videoId) {
   } catch (err) {
     console.warn('[YouTube] Server proxy failed. Falling back to client-side Piped/Invidious racing...', err.message);
     const clientUrl = await resolveYouTubeStreamUrlClientSide(videoId);
-    return getApiUrl(`/api/yt-proxy?url=${encodeURIComponent(clientUrl)}`);
+    return clientUrl; // Return direct clientUrl, no proxy needed!
   }
 }
 
