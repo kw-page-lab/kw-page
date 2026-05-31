@@ -52,6 +52,14 @@ let wsEverConnected = false;   // true once first connection established
 let connectionGraceTimer = 8.0; // Grace period before showing 404 (mobile restart needs ~5s)
 let wsReconnectDelay = 1000;   // Exponential backoff for mobile reconnects
 
+export const crtAverageColor = new THREE.Color(0xaad8ff);
+
+// Hidden 1x1 canvas for real-time ambient color reflection analysis
+const analyserCanvas = document.createElement('canvas');
+analyserCanvas.width = 1;
+analyserCanvas.height = 1;
+const analyserCtx = analyserCanvas.getContext('2d', { willReadFrequently: true });
+
 let isImmediateVideoActive = false;
 let videoOverrideTimeout = null;
 let lastAppliedPreset = null;
@@ -488,8 +496,6 @@ function initWebSocket() {
           CONFIG.mode = 'video';
           wsText = data.text || '';
           wsTextPosition = data.textPosition || 'center';
-          wsFilterMode = 0;
-          wsFilterColor = '#ffffff';
 
           if (videoOverrideTimeout) {
             clearTimeout(videoOverrideTimeout);
@@ -1722,6 +1728,66 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
         inTransition = true;
       }
     }
+  }
+
+  // Real-time Ambilight color extraction from the active screen texture
+  const sourceTex = uniforms.uTexture.value;
+  if (sourceTex && sourceTex.image) {
+    const source = sourceTex.image;
+    
+    // Safety check: only draw HTML5 Video if it is playing and ready
+    let canDraw = true;
+    if (source instanceof HTMLVideoElement) {
+      if (source.readyState < 2 || source.paused) {
+        canDraw = false;
+      }
+    }
+    
+    if (canDraw) {
+      try {
+        analyserCtx.drawImage(source, 0, 0, 1, 1);
+        const pixel = analyserCtx.getImageData(0, 0, 1, 1).data;
+        let r = pixel[0] / 255;
+        let g = pixel[1] / 255;
+        let b = pixel[2] / 255;
+        
+        // Apply post-shader analytical color filters on CPU so reflection color matches screen exactly
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (wsFilterMode === 1) { // Green
+          r = luma * 0.22 * 1.35; g = luma * 1.0 * 1.35; b = luma * 0.08 * 1.35;
+        } else if (wsFilterMode === 2) { // Red
+          r = luma * 1.0 * 1.35; g = luma * 0.15 * 1.35; b = luma * 0.15 * 1.35;
+        } else if (wsFilterMode === 3) { // Yellow
+          r = luma * 1.0 * 1.35; g = luma * 0.82 * 1.35; b = 0.0;
+        } else if (wsFilterMode === 4) { // Rainbow
+          const hue = (elapsedTime * 0.15) % 1.0;
+          const rainbowCol = new THREE.Color().setHSL(hue, 1.0, 0.5);
+          r = luma * rainbowCol.r * 1.5; g = luma * rainbowCol.g * 1.5; b = luma * rainbowCol.b * 1.5;
+        } else if (wsFilterMode === 5) { // Custom Tint
+          const cColor = new THREE.Color(wsFilterColor);
+          r = luma * cColor.r * 1.35; g = luma * cColor.g * 1.35; b = luma * cColor.b * 1.35;
+        } else {
+          // Standard CRT phosphor cold-blue tinting (color weighting toward blue)
+          r = r * 0.68; g = g * 0.73; b = b * 0.90;
+        }
+        
+        // Damp and scale colors so it doesn't saturate horribly in the room, keeping it opaque/ambient
+        const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+        let scale = 1.0;
+        if (brightness > 0.82) {
+          scale = 0.82 / brightness; // Cap maximum screen brightness to prevent blinding/saturating
+        }
+        
+        crtAverageColor.setRGB(r * scale, g * scale, b * scale);
+      } catch (err) {
+        // CORS or drawing error fallback: soft blue CRT glow
+        crtAverageColor.setHex(0xaad8ff);
+      }
+    } else {
+      crtAverageColor.setHex(0xaad8ff);
+    }
+  } else {
+    crtAverageColor.setHex(0xaad8ff);
   }
 }
 

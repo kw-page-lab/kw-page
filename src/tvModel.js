@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import crtVertexShader from './shaders/crtVertex.glsl?raw';
 import crtFragmentShader from './shaders/crtFragment.glsl?raw';
 import { setMilestone } from './loader.js';
-import { loadScreenAssets, updateScreenManager, inTransition, destroyScreenManager } from './screenManager.js';
+import { loadScreenAssets, updateScreenManager, inTransition, destroyScreenManager, crtAverageColor } from './screenManager.js';
 
 const getMeshBoundingBox = (object) => {
   const box = new THREE.Box3();
@@ -271,6 +271,9 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
         }
 
         updateScreenManager(crtMaterial.uniforms, elapsedTime, deltaTime);
+
+        // Smoothly lerp cathode spotlight color toward the real-time extracted average screen color
+        crtLight.color.lerp(crtAverageColor, 0.12);
 
         crtLight.intensity = (1.4 + Math.sin(elapsedTime * 35.0) * 0.18 + Math.sin(elapsedTime * 7.0) * 0.06) * 16.0;
 
