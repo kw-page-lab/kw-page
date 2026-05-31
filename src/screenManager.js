@@ -89,14 +89,29 @@ const getApiUrl = (path) => {
   return `https://kimeraware.macrostasis.dev${path}`;
 };
 
+const getAssetUrl = (path) => {
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return path;
+  }
+  // If running on macrostasis.dev domain, relative path is perfectly fine
+  if (hostname.includes('macrostasis.dev')) {
+    return path;
+  }
+  // Otherwise (e.g. running on kimeraware.com served from GitHub Pages),
+  // load the assets absolutely from the macrostasis.dev VPS (CORS enabled in Nginx)
+  return `https://kimeraware.macrostasis.dev${path}`;
+};
+
 const ensureProxiedUrl = (url) => {
   if (!url) return url;
   let finalUrl = url;
   
-  // Normalize any absolute or relative URLs containing /assets/ to be relative to the current host.
+  // Normalize any absolute or relative URLs containing /assets/ to be served from the proper VPS domain.
   // This completely bypasses cross-origin CORS blocks (e.g. kimeraware.macrostasis.dev assets requested from kimeraware.com).
   if (url.includes('/assets/')) {
-    finalUrl = url.substring(url.indexOf('/assets/'));
+    const pathPart = url.substring(url.indexOf('/assets/'));
+    finalUrl = getAssetUrl(pathPart);
   }
   
   if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
@@ -151,7 +166,14 @@ function loadTextureFromBase64(base64Data) {
     img.onerror = (err) => {
       reject(err);
     };
-    img.src = base64Data;
+    
+    // Normalize relative /assets/ URLs for cross-domain loading compatibility
+    let srcUrl = base64Data;
+    if (base64Data && base64Data.includes('/assets/')) {
+      const pathPart = base64Data.substring(base64Data.indexOf('/assets/'));
+      srcUrl = getAssetUrl(pathPart);
+    }
+    img.src = srcUrl;
   });
 }
 
