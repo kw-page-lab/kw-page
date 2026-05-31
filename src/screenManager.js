@@ -93,8 +93,14 @@ const ensureProxiedUrl = (url) => {
   if (!url) return url;
   let finalUrl = url;
   
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    if (!url.includes('/api/yt-proxy')) {
+  // Normalize any absolute or relative URLs containing /assets/ to be relative to the current host.
+  // This completely bypasses cross-origin CORS blocks (e.g. kimeraware.macrostasis.dev assets requested from kimeraware.com).
+  if (url.includes('/assets/')) {
+    finalUrl = url.substring(url.indexOf('/assets/'));
+  }
+  
+  if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+    if (!finalUrl.includes('/api/yt-proxy')) {
       const hostname = window.location.hostname;
       let shouldProxy = true;
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -108,20 +114,20 @@ const ensureProxiedUrl = (url) => {
       
       // Do not proxy if it's already a CORS-friendly public proxy/instance, contains local=true, or is a local asset
       if (
-        url.includes('local=true') || 
-        url.includes('/assets/') ||
-        url.includes('assets/') ||
-        url.includes('piped') || 
-        url.includes('cobalt') || 
-        url.includes('invidious') || 
-        url.includes('yewtu.be') || 
-        url.includes('nadeko.net')
+        finalUrl.includes('local=true') || 
+        finalUrl.includes('/assets/') ||
+        finalUrl.includes('assets/') ||
+        finalUrl.includes('piped') || 
+        finalUrl.includes('cobalt') || 
+        finalUrl.includes('invidious') || 
+        finalUrl.includes('yewtu.be') || 
+        finalUrl.includes('nadeko.net')
       ) {
         shouldProxy = false;
       }
       
       if (shouldProxy) {
-        finalUrl = getApiUrl(`/api/yt-proxy?url=${encodeURIComponent(url)}`);
+        finalUrl = getApiUrl(`/api/yt-proxy?url=${encodeURIComponent(finalUrl)}`);
       }
     }
   }
