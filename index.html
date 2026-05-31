@@ -244,7 +244,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-vKt2FXDc.js"></script>
+  <script type="module" crossorigin src="/assets/index-BryFYReR.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-WqNOAS6Y.css">
 </head>
 <body>
@@ -301,8 +301,8 @@
       
       function updateCredits() {
         const now = Date.now();
-        // Bloquear durante los primeros 30 segundos (30000 ms) tras la carga de la página
-        if (now - startTime < 30000) {
+        // Bloquear durante los primeros 3 segundos (3000 ms) tras la carga de la página
+        if (now - startTime < 3000) {
           if (isMacrostasis) {
             isMacrostasis = false;
             link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
@@ -313,8 +313,8 @@
         }
 
         const nowSec = new Date().getSeconds();
-        // Activo por los primeros 5 segundos de cada minuto (0, 1, 2, 3, 4)
-        const shouldBeMacro = (nowSec >= 0 && nowSec < 5);
+        // Activo por los primeros 20 segundos de cada minuto (0 a 19)
+        const shouldBeMacro = (nowSec >= 0 && nowSec < 20);
         
         if (shouldBeMacro !== isMacrostasis) {
           isMacrostasis = shouldBeMacro;
