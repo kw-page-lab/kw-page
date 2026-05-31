@@ -38,6 +38,7 @@ let eyeSigilTexture = null;
 const loadedSlideTextures = {};
 let activeVideo = null;
 let videoTexture = null;
+let hlsInstance = null;
 
 // WebSockets real-time events state
 let ws = null;
@@ -458,6 +459,10 @@ function initWebSocket() {
         }
 
         // Clean up previous video playback
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
         if (activeVideo) {
           activeVideo.pause();
           activeVideo.removeAttribute('src');
@@ -502,8 +507,48 @@ function initWebSocket() {
         activeVideo.addEventListener('canplay', setSeekTime, { once: true });
 
         activeVideo.crossOrigin = 'anonymous';
-        activeVideo.src = ensureProxiedUrl(targetUrl);
-        activeVideo.load();
+        const proxiedUrl = ensureProxiedUrl(targetUrl);
+
+        if (proxiedUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
+          if (Hls.isSupported()) {
+            hlsInstance = new Hls({
+              maxBufferLength: 8,      // Short buffer for real-time video synchronization
+              maxMaxBufferLength: 12,
+              enableWorker: true,
+              lowLatencyMode: true
+            });
+            hlsInstance.loadSource(proxiedUrl);
+            hlsInstance.attachMediaElement(activeVideo);
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+              console.log('[HLS.js WS] Manifest loaded, playing...');
+            });
+            hlsInstance.on(Hls.Events.ERROR, (event, hlsData) => {
+              if (hlsData.fatal) {
+                switch (hlsData.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    console.warn('[HLS.js WS] Network error, attempting recovery...', hlsData);
+                    hlsInstance.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    console.warn('[HLS.js WS] Media error, attempting recovery...', hlsData);
+                    hlsInstance.recoverMediaError();
+                    break;
+                  default:
+                    console.error('[HLS.js WS] Unrecoverable error', hlsData);
+                    break;
+                }
+              }
+            });
+          } else if (activeVideo.canPlayType('application/vnd.apple.mpegurl')) {
+            // Native Safari/iOS support
+            activeVideo.src = proxiedUrl;
+            activeVideo.load();
+          }
+        } else {
+          // Standard MP4 fallback
+          activeVideo.src = proxiedUrl;
+          activeVideo.load();
+        }
 
         // If loop is disabled, exit override immediately when the video finishes playing
         if (!activeVideo.loop) {
@@ -1300,6 +1345,10 @@ async function updateVideoSource(url, loop, playAudio) {
   let targetUrl = url;
   if (!url) {
     currentVideoUrl = null;
+    if (hlsInstance) {
+      hlsInstance.destroy();
+      hlsInstance = null;
+    }
     if (activeVideo) {
       activeVideo.pause();
       activeVideo.removeAttribute('src');
@@ -1331,6 +1380,12 @@ async function updateVideoSource(url, loop, playAudio) {
 
   currentVideoUrl = targetUrl;
 
+  // Clean up any existing Hls instance before loading a new video source
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+
   let isNewVideo = false;
   if (!activeVideo) {
     activeVideo = document.createElement('video');
@@ -1344,10 +1399,50 @@ async function updateVideoSource(url, loop, playAudio) {
   activeVideo.loop = loop;
   activeVideo.muted = !playAudio;
   activeVideo.dataset.shouldPlayAudio = !!playAudio;
-
   activeVideo.crossOrigin = 'anonymous';
-  activeVideo.src = ensureProxiedUrl(targetUrl);
-  activeVideo.load();
+
+  const proxiedUrl = ensureProxiedUrl(targetUrl);
+  
+  if (proxiedUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls({
+        maxBufferLength: 8,      // Short buffer for real-time video synchronization
+        maxMaxBufferLength: 12,
+        enableWorker: true,
+        lowLatencyMode: true
+      });
+      hlsInstance.loadSource(proxiedUrl);
+      hlsInstance.attachMediaElement(activeVideo);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('[HLS.js] Manifest loaded, playing...');
+      });
+      hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn('[HLS.js] Network error, attempting recovery...', data);
+              hlsInstance.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('[HLS.js] Media error, attempting recovery...', data);
+              hlsInstance.recoverMediaError();
+              break;
+            default:
+              console.error('[HLS.js] Unrecoverable error', data);
+              break;
+          }
+        }
+      });
+    } else if (activeVideo.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Safari/iOS support
+      activeVideo.src = proxiedUrl;
+      activeVideo.load();
+    }
+  } else {
+    // Standard MP4 fallback
+    activeVideo.src = proxiedUrl;
+    activeVideo.load();
+  }
 
   if (isNewVideo) {
     try {
