@@ -382,9 +382,7 @@ function initWebSocket() {
         // Measure time spent resolving the YouTube stream URL
         const messageReceivedTime = performance.now();
 
-        // Show thematic static noise and loading text immediately
-        wsMode = 'static';
-        wsText = 'SINTONIZANDO...';
+        // Bypassed: directly load the video without showing "SINTONIZANDO..." static screen
 
         // Increment Request ID to discard old requests
         const currentReqId = ++videoRequestId;
@@ -1443,39 +1441,8 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
     uniforms.uFilterColor.value.set(wsFilterColor);
   }
 
-  // 1. Handle WebSockets Connection Fallback & Grace Period
-  if (!wsConnected) {
-    if (!wsEverConnected) {
-      // First-ever connection — show CONECTANDO... on noise
-      if (connectionGraceTimer > 0.0) {
-        connectionGraceTimer -= deltaTime;
-        drawNoiseOnCanvas();
-        uniforms.uTexture.value = noiseTexture;
-        uniforms.uChildVisibility.value = 0.0;
-        updateTextTexture('CONECTANDO...');
-      } else {
-        drawNoiseOnCanvas();
-        uniforms.uTexture.value = noiseTexture;
-        uniforms.uChildVisibility.value = 0.0;
-        updateTextTexture('404 NO CONNECTION');
-      }
-    } else {
-      // Brief reconnect — keep showing whatever was displayed last.
-      // Only show NO CONNECTION if disconnected longer than grace period.
-      if (connectionGraceTimer > 0.0) {
-        connectionGraceTimer -= deltaTime;
-        // Don't change the display — fall through to normal render
-      } else {
-        drawNoiseOnCanvas();
-        uniforms.uTexture.value = noiseTexture;
-        uniforms.uChildVisibility.value = 0.0;
-        updateTextTexture('404 NO CONNECTION');
-        return;
-      }
-    }
-    if (!wsEverConnected) return;
-  } else {
-    // Keep resetting grace timer while connected so it has full window on disconnect
+  // 1. Handle WebSockets Connection Fallback & Grace Period (Bypassed to keep base visual premium and avoid loading screen)
+  if (wsConnected) {
     connectionGraceTimer = 8.0;
   }
 
