@@ -173,6 +173,12 @@ function loadTextureFromBase64(base64Data) {
       const pathPart = base64Data.substring(base64Data.indexOf('/assets/'));
       srcUrl = getAssetUrl(pathPart);
     }
+    
+    // Enable CORS for cross-domain texture loads in production
+    if (srcUrl && (srcUrl.startsWith('http://') || srcUrl.startsWith('https://'))) {
+      img.crossOrigin = 'anonymous';
+    }
+    
     img.src = srcUrl;
   });
 }
