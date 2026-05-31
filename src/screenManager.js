@@ -106,9 +106,11 @@ const ensureProxiedUrl = (url) => {
         } catch (e) {}
       }
       
-      // Do not proxy if it's already a CORS-friendly public proxy/instance or contains local=true
+      // Do not proxy if it's already a CORS-friendly public proxy/instance, contains local=true, or is a local asset
       if (
         url.includes('local=true') || 
+        url.includes('/assets/') ||
+        url.includes('assets/') ||
         url.includes('piped') || 
         url.includes('cobalt') || 
         url.includes('invidious') || 
@@ -1632,11 +1634,19 @@ export function updateScreenManager(uniforms, elapsedTime, deltaTime) {
 
   if (CONFIG.mode === 'video') {
     inTransition = false;
-    if (videoTexture && activeVideo && activeVideo.readyState >= 2) {
-      videoTexture.needsUpdate = true;
+    
+    // Check if the video has loaded at least one frame.
+    // If it has, even if it temporarily buffers (readyState < 2), we keep showing the last frame
+    // from the videoTexture instead of flashing jarring black-and-white static noise!
+    const hasActiveFrame = videoTexture && activeVideo && (activeVideo.readyState >= 2 || activeVideo.currentTime > 0);
+    
+    if (hasActiveFrame) {
+      if (activeVideo.readyState >= 2) {
+        videoTexture.needsUpdate = true;
+      }
       uniforms.uTexture.value = videoTexture;
     } else {
-      // Show thematic static noise while video is buffering / loading
+      // Show thematic static noise while video is loading the very first frame
       drawNoiseOnCanvas();
       uniforms.uTexture.value = noiseTexture;
     }
