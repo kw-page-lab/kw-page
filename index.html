@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <script>
+    (function() {
+      if (window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') {
+        const noop = function() {};
+        console.log = noop;
+        console.warn = noop;
+        console.error = noop;
+        console.info = noop;
+        console.debug = noop;
+      }
+    })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="KimeraWare Fansite by MetaCodeX">
@@ -44,6 +56,10 @@
       text-transform: uppercase;
       white-space: nowrap;
       margin: 0;
+    }
+
+    .mobile-only {
+      display: none;
     }
 
     #loading-splash {
@@ -231,6 +247,9 @@
         white-space: normal;
         line-height: 1.5;
       }
+      .mobile-only {
+        display: block;
+      }
       #kw-overlay {
         bottom: 2.5vh;
         gap: 0.2em;
@@ -261,7 +280,7 @@
   </main>
 
   <div id="top-overlay">
-    <p id="top-tagline">DONDE LA REALIDAD SE DISTORSIONA, EL JUEGO COMIENZA.</p>
+    <p id="top-tagline">DONDE LA REALIDAD SE DISTORSIONA,<br class="mobile-only"> EL JUEGO COMIENZA.</p>
   </div>
 
   <div id="kw-overlay">
@@ -301,8 +320,8 @@
       
       function updateCredits() {
         const now = Date.now();
-        // Bloquear durante los primeros 30 segundos (30000 ms) tras la carga de la página
-        if (now - startTime < 30000) {
+        // Bloquear durante el primer minuto completo (60000 ms) tras la carga de la página
+        if (now - startTime < 60000) {
           if (isMacrostasis) {
             isMacrostasis = false;
             link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
@@ -313,8 +332,26 @@
         }
 
         const nowSec = new Date().getSeconds();
-        // Activo por los primeros 5 segundos de cada minuto (0, 1, 2, 3, 4)
-        const shouldBeMacro = (nowSec >= 0 && nowSec < 5);
+        // 20 segundos distribuidos durante todo el minuto:
+        // - [5, 7]   (2s)
+        // - [12, 15] (3s)
+        // - [22, 23] (1s)
+        // - [30, 34] (4s)
+        // - [40, 42] (2s)
+        // - [46, 49] (3s)
+        // - [53, 58] (5s)
+        // Total = 2 + 3 + 1 + 4 + 2 + 3 + 5 = 20 segundos
+        const intervals = [
+          { start: 5, end: 7 },
+          { start: 12, end: 15 },
+          { start: 22, end: 23 },
+          { start: 30, end: 34 },
+          { start: 40, end: 42 },
+          { start: 46, end: 49 },
+          { start: 53, end: 58 }
+        ];
+        
+        const shouldBeMacro = intervals.some(interval => nowSec >= interval.start && nowSec < interval.end);
         
         if (shouldBeMacro !== isMacrostasis) {
           isMacrostasis = shouldBeMacro;

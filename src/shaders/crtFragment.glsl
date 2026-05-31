@@ -8,6 +8,12 @@ uniform float uMagneticTime;
 uniform float uMagneticIntensity;
 uniform float uMagneticBuildup;
 uniform vec2 uMagneticVelocity;
+uniform int uFilterMode;
+uniform vec3 uFilterColor;
+uniform float uScaleX;
+uniform float uScaleY;
+uniform float uIsVideo;
+uniform float uPowerOff;
 varying vec2 vUv;
 
 // ─────────────────────────────────────────────
@@ -145,13 +151,11 @@ void main() {
 
   // ─────────────────────────────────────────────
   // STEP 6. ASPECT RATIO CORRECTION
-  // Screen 1.75x1.40 = 1.25 aspect. Image 1394x2160 = 0.6454 aspect.
   // ─────────────────────────────────────────────
-  float scaleX = 1.25 / (1394.0 / 2160.0);
-  vec2 texUv = vec2((uv.x - 0.5) * scaleX + 0.5, uv.y);
+  vec2 texUv = vec2((uv.x - 0.5) * uScaleX + 0.5, (uv.y - 0.5) * uScaleY + 0.5);
 
   // Border clamping
-  float inTex = step(0.0, texUv.x) * step(texUv.x, 1.0);
+  float inTex = step(0.0, texUv.x) * step(texUv.x, 1.0) * step(0.0, texUv.y) * step(texUv.y, 1.0);
 
   // ─────────────────────────────────────────────
   // STEP 7. CHROMA BLEED — RGB split (1-2px chromatic aberration)
@@ -189,9 +193,9 @@ void main() {
       texUv.y >= childMin.y && texUv.y <= childMax.y) {
     vec2 childUv = (texUv - childMin) / (childMax - childMin);
     vec4 childColor = texture2D(uTextureChild, childUv);
-    childMaskVal = childColor.a * 0.50 * uChildVisibility;
+    childMaskVal = childColor.a * 0.82 * uChildVisibility;
     childLumaVal = dot(childColor.rgb * 5.0, vec3(0.299, 0.587, 0.114));
-    texColor.a = max(texColor.a, childColor.a * 0.50 * uChildVisibility);
+    texColor.a = max(texColor.a, childColor.a * 0.82 * uChildVisibility);
   }
 
   // ─────────────────────────────────────────────
@@ -214,17 +218,23 @@ void main() {
 
   // Desaturate heavily (near monochrome)
   float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-  texColor.rgb = mix(vec3(luma), texColor.rgb, 0.12);
-
-  // Lift blacks — no pure black in VHS/CRT
-  texColor.rgb = texColor.rgb * 0.75 + 0.10;
-
-  // Force image hue to match exactly the phosphor screen color palette.
-  // Instead of a generic cold tint, tint toward the actual phosphorBase hue
-  // so figure and background live in the same color space.
-  vec3 phosphorHue = vec3(0.68, 0.73, 0.90); // same as phosphorBase hue
-  // Mix image toward phosphor hue: 70% phosphor hue color weighting
-  texColor.rgb = mix(texColor.rgb, texColor.rgb * phosphorHue * 1.15, 0.75);
+  if (uIsVideo > 0.5) {
+    // Preserve video colors: 85% original color saturation, less black lift, very subtle phosphor hue tint
+    texColor.rgb = mix(vec3(luma), texColor.rgb, 0.85);
+    texColor.rgb = texColor.rgb * 0.90 + 0.05;
+    vec3 phosphorHue = vec3(0.68, 0.73, 0.90);
+    texColor.rgb = mix(texColor.rgb, texColor.rgb * phosphorHue * 1.10, 0.15);
+  } else {
+    texColor.rgb = mix(vec3(luma), texColor.rgb, 0.12);
+    // Lift blacks — no pure black in VHS/CRT
+    texColor.rgb = texColor.rgb * 0.75 + 0.10;
+    // Force image hue to match exactly the phosphor screen color palette.
+    // Instead of a generic cold tint, tint toward the actual phosphorBase hue
+    // so figure and background live in the same color space.
+    vec3 phosphorHue = vec3(0.68, 0.73, 0.90); // same as phosphorBase hue
+    // Mix image toward phosphor hue: 70% phosphor hue color weighting
+    texColor.rgb = mix(texColor.rgb, texColor.rgb * phosphorHue * 1.15, 0.75);
+  }
 
   // ─────────────────────────────────────────────
   // STEP 10. MACROBLOCKING + POSTERIZATION
@@ -254,7 +264,12 @@ void main() {
   float coarseNoise = hash(coarseUv + sin(uTime * 11.0));
   float blobNoise   = fbm(uv * 4.0 + uTime * 0.12);
   float lumaNoise   = fineNoise * 0.45 + coarseNoise * 0.35 + blobNoise * 0.20;
-  lumaNoise         = lumaNoise * 0.55 + 0.25; // lifted — no pure black
+  if (uIsVideo > 0.5) {
+    // Make noise much more subtle when video is active
+    lumaNoise       = lumaNoise * 0.15 + 0.85; 
+  } else {
+    lumaNoise       = lumaNoise * 0.55 + 0.25; // lifted — no pure black
+  }
 
   vec3 phosphorBase = vec3(0.68, 0.73, 0.90) * lumaNoise;
 
@@ -283,13 +298,23 @@ void main() {
 
   // ...and use it to brighten/darken the phosphor base color.
   // The figure NEVER introduces its own color — it only changes how bright the phosphor shines.
-  vec3 figureAsPhosphor = phosphorBase * (recoveredLuma * 5.2 + 0.25);
+  vec3 figureAsPhosphor;
+  if (uIsVideo > 0.5) {
+    // When video is active, blend the actual video colors with phosphor Base
+    figureAsPhosphor = mix(texColor.rgb * 1.35, phosphorBase * (recoveredLuma * 1.5), 0.12);
+  } else {
+    figureAsPhosphor = phosphorBase * (recoveredLuma * 5.2 + 0.25);
+  }
 
   // Soft alpha: edges dissolve into nothing very gently
   float softAlpha = texAlpha * texAlpha; // quadratic — very fast falloff at edges
 
   // Final composite: figure = phosphor brightness modulation
   vec3 screenContent = mix(phosphorBase, figureAsPhosphor, softAlpha * 0.95);
+
+  if (uPowerOff > 0.5) {
+    screenContent = vec3(0.0);
+  }
 
   // ─────────────────────────────────────────────
   // STEP 13.5. PHOSPHORESCENT GREEN TEXT OVERLAY (top-left screen mapping with chroma aberration)
@@ -417,6 +442,36 @@ void main() {
       float rainbowStrength = buildupFactor * rEnv * uMagneticIntensity * 0.92;
       screenContent = mix(screenContent, rainbow, clamp(rainbowStrength, 0.0, 0.9));
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // STEP 22. COLOR FILTER (GREEN, RED, YELLOW, RAINBOW, CUSTOM TINT)
+  // ─────────────────────────────────────────────
+  if (uFilterMode == 1) {
+    // Green
+    float screenLuma = dot(screenContent, vec3(0.299, 0.587, 0.114));
+    screenContent = vec3(screenLuma) * vec3(0.22, 1.0, 0.08) * 1.35;
+  } else if (uFilterMode == 2) {
+    // Red
+    float screenLuma = dot(screenContent, vec3(0.299, 0.587, 0.114));
+    screenContent = vec3(screenLuma) * vec3(1.0, 0.15, 0.15) * 1.35;
+  } else if (uFilterMode == 3) {
+    // Yellow
+    float screenLuma = dot(screenContent, vec3(0.299, 0.587, 0.114));
+    screenContent = vec3(screenLuma) * vec3(1.0, 0.82, 0.0) * 1.35;
+  } else if (uFilterMode == 4) {
+    // Rainbow
+    float h = fract(uv.x * 0.5 + uv.y * 0.5 - uTime * 0.15);
+    float r = clamp(abs(h * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+    float g = clamp(2.0 - abs(h * 6.0 - 2.0), 0.0, 1.0);
+    float b = clamp(2.0 - abs(h * 6.0 - 4.0), 0.0, 1.0);
+    vec3 rainbowColor = vec3(r, g, b);
+    float screenLuma = dot(screenContent, vec3(0.299, 0.587, 0.114));
+    screenContent = vec3(screenLuma) * rainbowColor * 1.5;
+  } else if (uFilterMode == 5) {
+    // Custom Color Tint
+    float screenLuma = dot(screenContent, vec3(0.299, 0.587, 0.114));
+    screenContent = vec3(screenLuma) * uFilterColor * 1.35;
   }
 
   // ─────────────────────────────────────────────

@@ -24,51 +24,11 @@ const getMeshBoundingBox = (object) => {
   return box;
 };
 
-function dec(hex) {
-  const key = import.meta.env.VITE_XOR_KEY_STRING || 'kw';
-  let res = '';
-  for (let i = 0; i < hex.length; i += 2) {
-    const byte = parseInt(hex.substring(i, i + 2), 16);
-    const keyChar = key.charCodeAt((i / 2) % key.length);
-    res += String.fromCharCode(byte ^ keyChar);
-  }
-  return res;
-}
-
-async function loadEncryptedAsset(url, mimeType, textureLoader) {
-  const response = await fetch(url);
-  const buffer = await response.arrayBuffer();
-  const view = new Uint8Array(buffer);
-  const keyStr = import.meta.env.VITE_XOR_KEY_BYTES || '75,87,95,65,82,71';
-  const key = keyStr.split(',').map(Number);
-  for (let i = 0; i < view.length; i++) {
-    view[i] ^= key[i % key.length];
-  }
-  const blob = new Blob([view], { type: mimeType });
-  const blobUrl = URL.createObjectURL(blob);
-  
-  return new Promise((resolve, reject) => {
-    textureLoader.load(
-      blobUrl,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        URL.revokeObjectURL(blobUrl);
-        resolve(tex);
-      },
-      undefined,
-      (err) => {
-        URL.revokeObjectURL(blobUrl);
-        reject(err);
-      }
-    );
-  });
-}
+// Assets are now fully server-driven via WebSocket.
+// No local encrypted textures are loaded at startup.
 
 export function loadTV(scene, controls, spotlight, spotTarget) {
   const gltfLoader = new GLTFLoader();
-  const textureLoader = new THREE.TextureLoader();
 
   const modelPromise = new Promise((resolve, reject) => {
     gltfLoader.load(
@@ -92,33 +52,15 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
     );
   });
 
-  const texture1Promise = loadEncryptedAsset(dec('4407340345130a03'), 'image/webp', textureLoader)
-    .then((tex) => {
-      setMilestone('texture1', 10);
-      return tex;
-    })
-    .catch((err) => {
-      console.error('Error loading texture 1:', err);
-      throw err;
-    });
+  // Mark texture milestones instantly since assets come from server now
+  setMilestone('texture1', 10);
+  setMilestone('texture2', 10);
 
-  const texture2Promise = loadEncryptedAsset(dec('4404340545130a03'), 'image/webp', textureLoader)
-    .then((tex) => {
-      setMilestone('texture2', 10);
-      return tex;
+  return modelPromise
+    .then((gltf) => {
+      return loadScreenAssets().then(() => gltf);
     })
-    .catch((err) => {
-      console.error('Error loading texture 2:', err);
-      throw err;
-    });
-
-  return Promise.all([modelPromise, texture1Promise, texture2Promise])
-    .then(([gltf, crtTexture, childTexture]) => {
-      return loadScreenAssets(crtTexture, childTexture).then(() => {
-        return [gltf, crtTexture, childTexture];
-      });
-    })
-    .then(([gltf, crtTexture, childTexture]) => {
+    .then((gltf) => {
       const tvGroup = new THREE.Group();
       scene.add(tvGroup);
 
@@ -165,15 +107,21 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
         fragmentShader: crtFragmentShader,
         uniforms: {
           uTime: { value: 0 },
-          uTexture: { value: crtTexture },
-          uTextureChild: { value: childTexture },
+          uTexture: { value: null },       // Populated by server via WS
+          uTextureChild: { value: null },   // Populated by server via WS
           uTextureText: { value: null },
           uChildVisibility: { value: 0.0 },
           uMagneticCenter: { value: new THREE.Vector2(-10.0, -10.0) },
           uMagneticTime: { value: 0.0 },
           uMagneticIntensity: { value: 0.0 },
           uMagneticBuildup: { value: 0.0 },
-          uMagneticVelocity: { value: new THREE.Vector2(0.0, 0.0) }
+          uMagneticVelocity: { value: new THREE.Vector2(0.0, 0.0) },
+          uFilterMode: { value: 0 },
+          uFilterColor: { value: new THREE.Color('#ffffff') },
+          uScaleX: { value: 1.0 },
+          uScaleY: { value: 1.0 },
+          uIsVideo: { value: 0.0 },
+          uPowerOff: { value: 0.0 }
         }
       });
 
