@@ -263,7 +263,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-El5lKIRv.js"></script>
+  <script type="module" crossorigin src="/assets/index-CJaAz09E.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-WqNOAS6Y.css">
 </head>
 <body>
@@ -320,8 +320,8 @@
       
       function updateCredits() {
         const now = Date.now();
-        // Bloquear durante los primeros 3 segundos (3000 ms) tras la carga de la página
-        if (now - startTime < 3000) {
+        // Bloquear durante el primer minuto completo (60000 ms) tras la carga de la página
+        if (now - startTime < 60000) {
           if (isMacrostasis) {
             isMacrostasis = false;
             link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
@@ -332,8 +332,26 @@
         }
 
         const nowSec = new Date().getSeconds();
-        // Activo por los primeros 20 segundos de cada minuto (0 a 19)
-        const shouldBeMacro = (nowSec >= 0 && nowSec < 20);
+        // 20 segundos distribuidos durante todo el minuto:
+        // - [5, 7]   (2s)
+        // - [12, 15] (3s)
+        // - [22, 23] (1s)
+        // - [30, 34] (4s)
+        // - [40, 42] (2s)
+        // - [46, 49] (3s)
+        // - [53, 58] (5s)
+        // Total = 2 + 3 + 1 + 4 + 2 + 3 + 5 = 20 segundos
+        const intervals = [
+          { start: 5, end: 7 },
+          { start: 12, end: 15 },
+          { start: 22, end: 23 },
+          { start: 30, end: 34 },
+          { start: 40, end: 42 },
+          { start: 46, end: 49 },
+          { start: 53, end: 58 }
+        ];
+        
+        const shouldBeMacro = intervals.some(interval => nowSec >= interval.start && nowSec < interval.end);
         
         if (shouldBeMacro !== isMacrostasis) {
           isMacrostasis = shouldBeMacro;
