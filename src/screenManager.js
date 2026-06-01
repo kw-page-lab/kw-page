@@ -267,6 +267,11 @@ function applyVideoSync(startTime, originalDuration) {
     return;
   }
   
+  // 1b. Live stream guard: Do not apply sync seeking to live streams to avoid stuttering at the live edge
+  if (activeVideo.duration === Infinity || !isFinite(activeVideo.duration)) {
+    return;
+  }
+  
   let expectedTime = (Date.now() - startTime) / 1000;
   const maxTime = originalDuration || Infinity;
   if (expectedTime < 0 || expectedTime >= maxTime) return;
@@ -552,7 +557,10 @@ function initWebSocket() {
             const nowElapsed = data.startTime
               ? Math.max(0, (Date.now() - data.startTime) / 1000)
               : elapsedAtReceive + timeSpent;
-            if (nowElapsed > 0 && nowElapsed < originalDuration) {
+            
+            if (activeVideo.duration === Infinity || !isFinite(activeVideo.duration)) {
+              console.log('[Seek] Live stream detected. Skipping initial seek to remain at the live edge.');
+            } else if (nowElapsed > 0 && nowElapsed < originalDuration) {
               console.log(`[Seek] Jumping to ${nowElapsed.toFixed(2)}s (load delay: ${timeSpent.toFixed(2)}s)`);
               activeVideo.currentTime = nowElapsed;
             }
