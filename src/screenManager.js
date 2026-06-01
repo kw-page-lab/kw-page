@@ -517,8 +517,8 @@ function initWebSocket() {
               enableWorker: true,
               lowLatencyMode: true
             });
+            hlsInstance.attachMedia(activeVideo);
             hlsInstance.loadSource(proxiedUrl);
-            hlsInstance.attachMediaElement(activeVideo);
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
               console.log('[HLS.js WS] Manifest loaded, playing...');
             });
@@ -1411,8 +1411,8 @@ async function updateVideoSource(url, loop, playAudio) {
         enableWorker: true,
         lowLatencyMode: true
       });
+      hlsInstance.attachMedia(activeVideo);
       hlsInstance.loadSource(proxiedUrl);
-      hlsInstance.attachMediaElement(activeVideo);
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
         console.log('[HLS.js] Manifest loaded, playing...');
       });
