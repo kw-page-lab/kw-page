@@ -252,9 +252,18 @@ async function applyPresetInternal(data) {
 
 // ── Video sync helpers ────────────────────────────────────────────────────────
 // Calculates the expected currentTime from absolute startTime and corrects
-// the video if the drift is larger than the tolerance threshold (0.3 s).
+// the video if the drift is larger than the tolerance threshold.
+// Built to prevent infinite bounce/seek loops under network or buffering latency.
+let lastSeekTime = 0;
+
 function applyVideoSync(startTime, originalDuration) {
   if (!activeVideo || activeVideo.paused || !startTime) return;
+  
+  // 1. Buffer guard: If the video is still in loading/buffering state, wait until it has enough data
+  if (activeVideo.readyState < 3) {
+    console.log(`[Sync] Skipping sync: Video is buffering/loading (readyState: ${activeVideo.readyState})`);
+    return;
+  }
   
   let expectedTime = (Date.now() - startTime) / 1000;
   const maxTime = originalDuration || Infinity;
@@ -266,8 +275,38 @@ function applyVideoSync(startTime, originalDuration) {
   }
   
   const drift = Math.abs(activeVideo.currentTime - expectedTime);
-  if (drift > 0.5) {
-    console.log(`[Sync] Drift detected: ${drift.toFixed(2)}s — correcting to ${expectedTime.toFixed(2)}s`);
+  
+  // 2. Adaptive drift threshold: Be more tolerant (2.0s) if the video just started, normal threshold (0.8s) afterwards
+  const threshold = (activeVideo.currentTime < 8) ? 2.0 : 0.8;
+  
+  if (drift > threshold) {
+    const now = Date.now();
+    // 3. Throttle seek corrections: Allow at most one correction every 6 seconds to let Hls.js fill the buffer
+    if (now - lastSeekTime < 6000) {
+      console.log(`[Sync] Drift detected (${drift.toFixed(2)}s) but throttling seek to let Hls.js buffer...`);
+      return;
+    }
+    
+    // 4. Check if the target position is buffered in HTML5 Video
+    // If it is NOT in buffer, we only seek if the drift is extremely large (e.g. > 4s), otherwise we let it buffer naturally
+    let isBuffered = false;
+    try {
+      const buf = activeVideo.buffered;
+      for (let i = 0; i < buf.length; i++) {
+        if (expectedTime >= buf.start(i) && expectedTime <= buf.end(i)) {
+          isBuffered = true;
+          break;
+        }
+      }
+    } catch(e) {}
+    
+    if (!isBuffered && drift < 4.0) {
+      console.log(`[Sync] Drift of ${drift.toFixed(2)}s detected, but target position ${expectedTime.toFixed(2)}s is not in buffer yet. Waiting for Hls.js buffering...`);
+      return;
+    }
+    
+    console.log(`[Sync] Correcting drift of ${drift.toFixed(2)}s (threshold: ${threshold}s) — seeking to ${expectedTime.toFixed(2)}s`);
+    lastSeekTime = now;
     activeVideo.currentTime = expectedTime;
   }
 }
