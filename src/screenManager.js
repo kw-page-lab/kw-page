@@ -36,6 +36,8 @@ let childTexture = null;
 let eyeSigilTexture = null;
 
 const loadedSlideTextures = {};
+let defaultVolumePercent = 80;
+let overrideVolumePercent = null;
 let activeVideo = null;
 let videoTexture = null;
 let hlsInstance = null;
@@ -311,6 +313,19 @@ function applyVideoSync(startTime, originalDuration) {
   }
 }
 
+function applyVideoVolume() {
+  if (!activeVideo) return;
+  
+  let targetPercent = defaultVolumePercent;
+  if (isImmediateVideoActive && overrideVolumePercent !== null) {
+    targetPercent = overrideVolumePercent;
+  }
+  
+  const targetVolume = targetPercent / 100;
+  activeVideo.volume = targetVolume;
+  console.log(`[Volume] Applied volume to video element: ${targetVolume} (${targetPercent}%)`);
+}
+
 // Starts a local 2-second interval that self-corrects playback using
 // the last known videoSyncData even if the WS heartbeat is slow/missing.
 function startVideoSelfSync() {
@@ -450,6 +465,7 @@ function initWebSocket() {
         // startTime        = absolute server timestamp (source of truth for sync).
         const originalDuration = parseFloat(data.originalDuration) || parseFloat(data.duration) || 30;
         const duration = parseFloat(data.duration) || 30;
+        overrideVolumePercent = data.videoVolume !== undefined ? data.videoVolume : null;
 
         // Always derive elapsed from startTime when available (most accurate).
         let elapsedAtReceive = 0;
@@ -756,6 +772,7 @@ function initWebSocket() {
 
       if (data.type === 'reset') {
         isImmediateVideoActive = false;
+        overrideVolumePercent = null; // Reiniciar volumen del override
         if (videoOverrideTimeout) {
           clearTimeout(videoOverrideTimeout);
           videoOverrideTimeout = null;
@@ -796,6 +813,16 @@ function initWebSocket() {
         } else {
           triggerEasterEgg(data);
         }
+      }
+ 
+      if (data.type === 'default_volume_change') {
+        defaultVolumePercent = data.volume;
+        applyVideoVolume();
+      }
+
+      if (data.type === 'override_volume_change') {
+        overrideVolumePercent = data.volume;
+        applyVideoVolume();
       }
     }
 
@@ -1142,9 +1169,8 @@ const forceActivateAudio = () => {
         activeVideo.muted = false;
         console.log('[Brute Force Audio] activeVideo unmuted!');
       }
-      if (activeVideo.volume !== 1.0) {
-        activeVideo.volume = 1.0;
-      }
+      // Apply correct volume rather than hardcoding 1.0
+      applyVideoVolume();
       if (activeVideo.paused) {
         activeVideo.play()
           .then(() => console.log('[Brute Force Audio] Forced activeVideo playback to start!'))
@@ -1483,6 +1509,9 @@ async function updateVideoSource(url, loop, playAudio) {
     activeVideo.load();
   }
 
+  // Set correct volume based on default/override settings!
+  applyVideoVolume();
+
   if (isNewVideo) {
     try {
       setupAudioFilters(activeVideo);
@@ -1510,6 +1539,7 @@ async function updateVideoSource(url, loop, playAudio) {
           console.log('Preset muted fallback autoplay succeeded!');
           const unmuteOnInteraction = () => {
             activeVideo.muted = !playAudio;
+            applyVideoVolume(); // Ensure volume is correctly applied upon unmuting
             if (audioCtx && audioCtx.state === 'suspended') {
               audioCtx.resume();
             }
