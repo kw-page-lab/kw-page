@@ -153,7 +153,8 @@ function animate() {
     frameCount++;
     const time = performance.now();
     if (time >= lastTime + 1000) {
-        fpsElement.innerText = 'FPS: ' + Math.round((frameCount * 1000) / (time - lastTime));
+        const modeText = window.isLinuxPlatform ? ' (Linux Mode)' : ' (Standard Mode)';
+        fpsElement.innerText = 'FPS: ' + Math.round((frameCount * 1000) / (time - lastTime)) + modeText;
         frameCount = 0;
         lastTime = time;
     }
