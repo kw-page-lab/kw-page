@@ -33,6 +33,9 @@ window.updateOverallProgress = function() {
         if (overlay && !overlay.classList.contains('faded')) {
             overlay.classList.add('faded');
             overlay.style.opacity = '0';
+            if (typeof resetIdleTimer === 'function') {
+                resetIdleTimer();
+            }
             setTimeout(() => {
                 overlay.style.display = 'none';
             }, 600);

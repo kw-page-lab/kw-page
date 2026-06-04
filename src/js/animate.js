@@ -138,8 +138,8 @@ function animate() {
         }
     }
 
-    // Eco Mode (Power Saver): if user is idle for more than 2 minutes, throttle to ~2 FPS to prevent high GPU/CPU usage
-    if (Date.now() - lastUserInteraction > 120000) {
+    // Eco Mode (Power Saver): if user is idle for more than 5 minutes, throttle to ~2 FPS to prevent high GPU/CPU usage
+    if (Date.now() - lastUserInteraction > 300000) {
         idleFrameCount++;
         if (idleFrameCount % 30 !== 0) return; // render only 1 of every 30 frames
     } else {
