@@ -2,11 +2,70 @@ function createClouds() {
     cloudsGroup = new THREE.Group();
     scene.add(cloudsGroup);
 
+    // Generate a noise texture using a 128x128 canvas
+    const noiseSize = 128;
+    const noiseCanvas = document.createElement('canvas');
+    noiseCanvas.width = noiseSize;
+    noiseCanvas.height = noiseSize;
+    const noiseCtx = noiseCanvas.getContext('2d');
+    const noiseImgData = noiseCtx.createImageData(noiseSize, noiseSize);
+    
+    function hashJS(x, y) {
+        let h = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453123;
+        return h - Math.floor(h);
+    }
+    function smoothNoiseJS(x, y) {
+        let ix = Math.floor(x);
+        let iy = Math.floor(y);
+        let fx = x - ix;
+        let fy = y - iy;
+        let ux = fx * fx * (3.0 - 2.0 * fx);
+        let uy = fy * fy * (3.0 - 2.0 * fy);
+        
+        let a = hashJS(ix, iy);
+        let b = hashJS((ix + 1) % 128, iy);
+        let c = hashJS(ix, (iy + 1) % 128);
+        let d = hashJS((ix + 1) % 128, (iy + 1) % 128);
+        
+        let mix1 = a + ux * (b - a);
+        let mix2 = c + ux * (d - c);
+        return mix1 + uy * (mix2 - mix1);
+    }
+    
+    const data = noiseImgData.data;
+    for (let y = 0; y < noiseSize; y++) {
+        for (let x = 0; x < noiseSize; x++) {
+            // Generate FBM with 2 octaves
+            let val = 0;
+            let amp = 0.5;
+            let freq = 0.08;
+            for (let oct = 0; oct < 2; oct++) {
+                val += amp * smoothNoiseJS(x * freq, y * freq);
+                freq *= 2.0;
+                amp *= 0.5;
+            }
+            
+            let cVal = Math.floor(val * 255);
+            let idx = (y * noiseSize + x) * 4;
+            data[idx] = cVal;
+            data[idx + 1] = cVal;
+            data[idx + 2] = cVal;
+            data[idx + 3] = 255;
+        }
+    }
+    noiseCtx.putImageData(noiseImgData, 0, 0);
+    const noiseTex = new THREE.CanvasTexture(noiseCanvas);
+    noiseTex.wrapS = THREE.RepeatWrapping;
+    noiseTex.wrapT = THREE.RepeatWrapping;
+    noiseTex.minFilter = THREE.LinearFilter;
+    noiseTex.magFilter = THREE.LinearFilter;
+
     // Cloud shader: procedural soft FBM noise with radial alpha mask
     const cloudMat = new THREE.ShaderMaterial({
         uniforms: {
             uTime:  { value: 0 },
             uColor: { value: new THREE.Color(0x1a2130) }, // dark slate grey
+            uNoiseTex: { value: noiseTex }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -21,34 +80,23 @@ function createClouds() {
         fragmentShader: `
             uniform float uTime;
             uniform vec3 uColor;
+            uniform sampler2D uNoiseTex;
             varying vec2 vUv;
             varying vec3 vWorld;
-
-            vec2 hash2(vec2 p){
-                p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));
-                return -1.0+2.0*fract(sin(p)*43758.5453123);
-            }
-            float noise(vec2 p){
-                vec2 i=floor(p),f=fract(p);
-                vec2 u=f*f*(3.0-2.0*f);
-                return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),
-                           mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);
-            }
-            float fbm(vec2 p){
-                float v=0.0,a=0.5;
-                for(int i=0;i<2;i++){v+=a*noise(p);p*=2.0;a*=0.5;}
-                return v;
-            }
 
             void main() {
                 // Soft round billboard mask
                 float dist = length(vUv - 0.5);
                 float alphaMask = smoothstep(0.5, 0.18, dist);
 
-                // Animate cloud FBM layers
-                vec2 p1 = vUv * 3.2 + vec2(uTime * 0.025, uTime * 0.018);
+                // Animate cloud FBM layers using the pre-computed noise texture
+                vec2 p1 = vUv * 0.4 + vec2(uTime * 0.015, uTime * 0.011);
+                vec2 p2 = vUv * 0.8 - vec2(uTime * 0.009, -uTime * 0.006);
                 
-                float n = fbm(p1);
+                float n1 = texture2D(uNoiseTex, p1).r;
+                float n2 = texture2D(uNoiseTex, p2).g;
+                float n = (n1 + n2 * 0.5) / 1.5;
+                
                 float density = smoothstep(0.15, 0.65, n);
 
                 // Blend dark slate with deep charcoal shadow at higher density (no red glow)
@@ -98,7 +146,7 @@ function createClouds() {
 }
 
 function createWaterParticles() {
-    const count = 4000;
+    const count = 1500;
     waterParticleGeometry = new THREE.BufferGeometry();
     waterParticlePositions = new Float32Array(count * 3);
     waterParticleColors = new Float32Array(count * 3);

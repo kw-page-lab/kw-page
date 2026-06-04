@@ -6,14 +6,14 @@ function createLiquidFloor() {
     });
 
     // Use high-res geometry so vertex displacement is smooth around the TV
-    const waterGeoHiRes = new THREE.PlaneGeometry(120, 120, 256, 256);
+    const waterGeoHiRes = new THREE.PlaneGeometry(120, 120, 128, 128);
 
     // 1. High-realism THREE.Water (from Three.js ocean example)
     liquidFloorReal = new THREE.Water(
         waterGeoHiRes,
         {
-            textureWidth: 512,
-            textureHeight: 512,
+            textureWidth: 256,
+            textureHeight: 256,
             waterNormals: waterNormals,
             sunDirection: new THREE.Vector3(-3.0, 2.0, 6.0).normalize(),
             sunColor: 0xffffff,
@@ -376,7 +376,7 @@ function createLiquidFloor() {
     });
 
     liquidFloor = new THREE.Mesh(
-        new THREE.PlaneGeometry(120, 120, 256, 256),
+        new THREE.PlaneGeometry(120, 120, 128, 128),
         liquidFloorMat
     );
     liquidFloor.rotation.x = -Math.PI / 2;

@@ -129,10 +129,13 @@ function animate() {
             }
         }
         
-        // Update geometry
-        window.tvCableCurve.points = nodes.map(n => n.pos);
-        if (window.tvCableMesh.geometry) window.tvCableMesh.geometry.dispose();
-        window.tvCableMesh.geometry = new THREE.TubeGeometry(window.tvCableCurve, 20, 0.04, 6, false);
+        // Update geometry (only every 2 frames to drastically reduce CPU garbage collection and GPU upload overhead)
+        window._cableFrameToggle = !window._cableFrameToggle;
+        if (window._cableFrameToggle) {
+            window.tvCableCurve.points = nodes.map(n => n.pos);
+            if (window.tvCableMesh.geometry) window.tvCableMesh.geometry.dispose();
+            window.tvCableMesh.geometry = new THREE.TubeGeometry(window.tvCableCurve, 20, 0.04, 6, false);
+        }
     }
 
     // Eco Mode (Power Saver): if user is idle for more than 2 minutes, throttle to ~2 FPS to prevent high GPU/CPU usage
