@@ -12,7 +12,7 @@ function init() {
     camera.position.set(0, 15.0, 10);
 
     // 3. Renderer Setup — no logarithmicDepthBuffer (huge perf cost, z-fighting handled by renderOrder)
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(1.0); // Safe cap at 1.0 to prevent GPU crash/thermal shutdown on 4K/HiDPI screens
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = false;
