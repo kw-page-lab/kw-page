@@ -1,0 +1,15 @@
+@font-face {
+    font-family: 'SLNTHLN';
+    src: url('/v2/font-slnthln.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'HollowThriller';
+    src: url('/v2/font-hollow.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
