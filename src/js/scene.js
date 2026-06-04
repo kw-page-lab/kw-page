@@ -12,7 +12,12 @@ function init() {
     camera.position.set(0, 15.0, 10);
 
     // 3. Renderer Setup — no logarithmicDepthBuffer (huge perf cost, z-fighting handled by renderOrder)
-    const isLinux = /Linux/i.test(navigator.userAgent) || /Linux/i.test(navigator.platform);
+    const isLinux = /Linux/i.test(navigator.userAgent) || 
+                  /Linux/i.test(navigator.platform) || 
+                  (navigator.userAgentData && navigator.userAgentData.platform && /Linux/i.test(navigator.userAgentData.platform));
+    
+    window.isLinuxPlatform = isLinux;
+    
     const rendererOptions = {
         antialias: !isLinux
     };
