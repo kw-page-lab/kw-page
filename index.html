@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>KimeraWare</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Sixtyfour&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="src/css/variables.css">
+    <link rel="stylesheet" href="src/css/fonts.v2.css">
+    <link rel="stylesheet" href="src/css/loader.css">
+    <link rel="stylesheet" href="src/css/layout.css">
+    <link rel="stylesheet" href="src/css/controls.css">
+    <link rel="stylesheet" href="src/css/sidebar.css">
+    <link rel="stylesheet" href="src/css/responsive.css">
+</head>
+<body>
+    <div class="vignette-overlay"></div>
+
+    <div id="loading-overlay">
+        <!-- Hidden elements for the TV bundle to write its status to -->
+        <div style="display: none;">
+            <div id="loading-bar-fill"></div>
+            <div id="loading-text"></div>
+        </div>
+        
+        <!-- Visible premium loader content -->
+        <div class="loader-content">
+            <img src="kimeraware.webp" alt="KimeraWare" class="loader-logo">
+            <div class="loader-bar-outer">
+                <div id="visible-loading-bar-fill"></div>
+            </div>
+            <div id="visible-loading-text">0%</div>
+        </div>
+
+        <!-- Hidden by default, shown only if loading fails -->
+        <div id="loading-status" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Cargando Modelo 3D...</div>
+        <div id="loading-details" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Conectando con el archivo GLB local para un renderizado ultra r&#225;pido...</div>
+    </div>
+
+    <div id="canvas-container"></div>
+    <div id="fps">FPS: --</div>
+
+    <!-- Top Tagline Container using HollowThriller font -->
+    <div class="top-tagline-container">
+        <div id="tagline-distorsiona" class="top-tagline">DONDE LA REALIDAD SE DISTORSIONA...</div>
+        <div id="tagline-comienza" class="top-tagline" style="opacity: 0;">EL JUEGO COMIENZA.</div>
+    </div>
+
+    <!-- TV Scene Specific Overlay (Only visible in TV Scene) -->
+    <div id="tv-scene-overlay" class="tv-overlay-container">
+        <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer">
+            <img src="logo_temp.png" alt="Kimeraware Logo" class="logo-img" />
+        </a>
+        <div class="coming-soon-text">PROXIMAMENTE...</div>
+        <div class="footer-credit">
+            webpage by <span id="easter-egg-word">metacodex</span>
+        </div>
+    </div>
+
+
+
+
+
+    <!-- Scroll Down Hint Indicator -->
+    <div id="scroll-hint-indicator" class="scroll-hint">
+        <span class="scroll-hint-text">DESLIZA HACIA ABAJO</span>
+        <div class="scroll-hint-chevron-container">
+            <svg class="scroll-hint-chevron" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+            <svg class="scroll-hint-chevron" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" style="margin-top: -12px;">
+                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Camera Lock Button -->
+    <button id="toggleLockCam" class="camera-lock-btn" title="Bloquear/Liberar C&#225;mara">
+        <span id="camera-lock-icon" style="display: flex; align-items: center; justify-content: center;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+            </svg>
+        </span>
+    </button>
+
+    <!-- Social Link Buttons (aligned under camera lock button) -->
+    <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer" id="youtubeLinkBtn" class="round-action-btn social-btn-youtube" title="Visitar YouTube de Kimeraware">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M23.498 6.163c-.272-1.016-1.07-1.815-2.085-2.087C19.56 3.5 12 3.5 12 3.5s-7.56 0-9.413.576C1.57 4.348.773 5.147.502 6.163.003 8.01 0 12 0 12s.003 3.99.502 5.837c.271 1.016 1.07 1.815 2.085 2.087C4.44 20.5 12 20.5 12 20.5s7.56 0 9.413-.576c1.015-.272 1.813-1.071 2.085-2.087.5-1.847.502-5.837.502-5.837s-.002-3.99-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+        </svg>
+    </a>
+    
+    <a href="https://x.com/KimeraWare" target="_blank" rel="noopener noreferrer" id="twitterLinkBtn" class="round-action-btn social-btn-twitter" title="Visitar Twitter de Kimeraware">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+    </a>
+
+    <!-- Import Three.js, OrbitControls and GLTFLoader -->
+    <script src="src/js/ws-interceptor.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="src/js/colormanagement-polyfill.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Water.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+    <script src="src/js/forge-fallback.js"></script>
+    <script src="tv-bundle.umd.js"></script>
+    <script src="src/js/autoreload.js"></script>
+    <script src="src/js/config.js"></script>
+    <script src="src/js/loader-manager.js"></script>
+    <script src="src/js/environment.js"></script>
+    <script src="src/js/particles.js"></script>
+    <script src="src/js/lights.js"></script>
+    <script src="src/js/floor.js"></script>
+    <script src="src/js/atmosphere.js"></script>
+    <script src="src/js/monolith.js"></script>
+    <script src="src/js/tv.js"></script>
+    <script src="src/js/camera.js"></script>
+    <script src="src/js/ui.js"></script>
+    <script src="src/js/animate.js"></script>
+    <script src="src/js/scene.js"></script>
+    <script src="src/js/main.js"></script>
+</body>
+</html>

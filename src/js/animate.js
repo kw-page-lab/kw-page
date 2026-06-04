@@ -1,0 +1,427 @@
+// Pause render loop when tab is not visible (saves 100% GPU when minimized)
+document.addEventListener('visibilitychange', () => {
+    isPageVisible = !document.hidden;
+});
+
+// Animation loop
+let idleFrameCount = 0;
+function animate() {
+    requestAnimationFrame(animate);
+    if (!isPageVisible) return; // Don't render hidden tabs
+
+    // Sync body class with TV focus state
+    if (isTVFocused) {
+        if (!document.body.classList.contains('tv-focused')) {
+            document.body.classList.add('tv-focused');
+        }
+    } else {
+        if (document.body.classList.contains('tv-focused')) {
+            document.body.classList.remove('tv-focused');
+        }
+    }
+
+    // Automatically hide scroll hint if we scroll down or enter TV focus
+    const scrollHint = document.getElementById('scroll-hint-indicator');
+    if (scrollHint && (scrollProgress > 0.05 || isTVFocused)) {
+        scrollHint.classList.remove('show');
+    }
+
+    const now = performance.now();
+    const deltaTime = (now - lastFrameTime) * 0.001;
+    lastFrameTime = now;
+
+    if (updateTV) {
+        updateTV(now * 0.001, deltaTime);
+    }
+    if (window.tvBezelLight && window.tvCrtLight) {
+        window.tvBezelLight.color.copy(window.tvCrtLight.color);
+        window.tvBezelLight.intensity = (window.tvCrtLight.intensity / 16.0) * 4.5;
+    }
+    if (window.tvBasePosition) {
+        const bob = Math.sin(now * 0.0015) * 0.08;
+        window.tvBasePosition.y = -2.5 + bob;
+    }
+
+    // Update TV Pulsar Light (Fades in and out, teleports when fully faded out, disabled when focused)
+    if (window.tvPulsarLight && window.relocateTvPulsar) {
+        if (isTVFocused) {
+            window.tvPulsarLight.intensity = 0.0;
+        } else {
+            const pulseSpeed = 1.8; // speed of pulsing
+            const pulse = Math.sin(now * 0.001 * pulseSpeed);
+            if (pulse > 0.0) {
+                window.tvPulsarLight.intensity = pulse * 24.0; // peak intensity
+                window.wasPulsarOff = false;
+            } else {
+                window.tvPulsarLight.intensity = 0.0;
+                if (!window.wasPulsarOff) {
+                    window.relocateTvPulsar();
+                    window.wasPulsarOff = true;
+                }
+            }
+        }
+    }
+
+    // Update TV Cable Physics & Mesh
+    if (window.tvCordNodes && window.tvCableMesh && window.tvCableCurve && window.tvCordAttachPoint) {
+        const numNodes = window.tvCordNodes.length;
+        const nodes = window.tvCordNodes;
+        const segmentLength = window.tvCordSegmentLength;
+        
+        // Get current attach point
+        const attachPos = new THREE.Vector3();
+        window.tvCordAttachPoint.getWorldPosition(attachPos);
+        
+        // Pin start node to TV
+        nodes[0].pos.copy(attachPos);
+        nodes[0].prevPos.copy(attachPos);
+        
+        // Pin end node to water floor anchor
+        const anchorPos = new THREE.Vector3(0, -2.5, -0.5);
+        nodes[numNodes - 1].pos.copy(anchorPos);
+        nodes[numNodes - 1].prevPos.copy(anchorPos);
+        
+        // Apply gravity & verlet integration (clamp dt to prevent explosions on tab focus lags)
+        const physDt = Math.min(deltaTime, 0.03); 
+        const gravity = new THREE.Vector3(0, -9.8, 0);
+        const dtSq = physDt * physDt;
+        const damping = 0.97;
+        
+        const waveTime = now * 0.0015;
+        for (let i = 1; i < numNodes - 1; i++) {
+            const node = nodes[i];
+            const temp = node.pos.clone();
+            
+            // pos = pos + (pos - prev) * damping + grav * dt^2
+            node.pos.addScaledVector(node.pos.clone().sub(node.prevPos), damping);
+            node.pos.addScaledVector(gravity, dtSq);
+            
+            // Apply water current / drag force if submerged (below water level y = -1.8)
+            if (node.pos.y < -1.8) {
+                const submergence = Math.min(1.0, (-1.8 - node.pos.y) / 0.7);
+                // Current drift towards positive X (flows to the right)
+                // Add some sinusoidal wave dynamics for natural water motion
+                const forceX = (2.2 + Math.sin(waveTime * 2.5 + i * 0.5) * 1.5) * submergence;
+                const forceZ = (Math.cos(waveTime * 1.8 + i * 0.4) * 1.0) * submergence;
+                
+                node.pos.addScaledVector(new THREE.Vector3(forceX, 0, forceZ), dtSq * 6.0);
+            }
+            
+            node.prevPos.copy(temp);
+        }
+        
+        // Solve constraints (distance locks)
+        for (let iter = 0; iter < 6; iter++) {
+            nodes[0].pos.copy(attachPos);
+            nodes[numNodes - 1].pos.copy(anchorPos);
+            
+            for (let i = 0; i < numNodes - 1; i++) {
+                const nA = nodes[i];
+                const nB = nodes[i+1];
+                const diff = nB.pos.clone().sub(nA.pos);
+                const dist = diff.length();
+                if (dist > 0.0001) {
+                    const error = (segmentLength - dist) / dist;
+                    const correction = diff.multiplyScalar(error * 0.5);
+                    if (i > 0) nA.pos.sub(correction);
+                    if (i < numNodes - 2) nB.pos.add(correction);
+                }
+            }
+        }
+        
+        // Update geometry
+        window.tvCableCurve.points = nodes.map(n => n.pos);
+        if (window.tvCableMesh.geometry) window.tvCableMesh.geometry.dispose();
+        window.tvCableMesh.geometry = new THREE.TubeGeometry(window.tvCableCurve, 20, 0.04, 6, false);
+    }
+
+    // Eco Mode (Power Saver): if user is idle for more than 2 minutes, throttle to ~2 FPS to prevent high GPU/CPU usage
+    if (Date.now() - lastUserInteraction > 120000) {
+        idleFrameCount++;
+        if (idleFrameCount % 30 !== 0) return; // render only 1 of every 30 frames
+    } else {
+        idleFrameCount = 0;
+    }
+
+    // Update time of day (void reactive environment)
+    updateEnvironmentFromTime();
+
+    // FPS Counter
+    frameCount++;
+    const time = performance.now();
+    if (time >= lastTime + 1000) {
+        fpsElement.innerText = 'FPS: ' + Math.round((frameCount * 1000) / (time - lastTime));
+        frameCount = 0;
+        lastTime = time;
+    }
+
+    // Rotate Cuboid
+    if (params.autoRotate && cuboidGroup) {
+        const speedFactor = params.rotateSpeed * 0.01;
+        const t = time * 0.001 * params.rotateSpeed;
+        
+        // Continuous horizontal rotation (around Y axis)
+        cuboidGroup.rotation.y += speedFactor;
+        
+        // Gentle limited oscillation/rocking vertically (around X and Z axes) to maintain legibility
+        cuboidGroup.rotation.x = Math.sin(t * 0.5) * 0.12; // Limit vertical tilt to ~7 degrees
+        cuboidGroup.rotation.z = Math.cos(t * 0.3) * 0.04; // Limit roll tilt to ~2 degrees
+    }
+
+    // Rotate background stars slowly
+    if (params.particles && starField) {
+        starField.rotation.y += 0.0003;
+        starField.rotation.x += 0.0001;
+    }
+
+    // Animate Red Blocks — direct array iteration, no traverse() overhead
+    if (redBlocks.length > 0) {
+        const t = time * 0.001;
+        const minZ = -0.06 + params.whiteOffset + 0.015;
+        for (let i = 0; i < redBlocks.length; i++) {
+            const c = redBlocks[i];
+            const wave = Math.sin(t * c.userData.animSpeed + c.userData.animPhase) * c.userData.animRange * params.animMult;
+            const targetZ = -0.06 + params.redOffset + wave;
+            c.position.z = targetZ < minZ ? minZ : targetZ;
+        }
+    }
+
+    if (isTVFocused) {
+        // Disable OrbitControls input processing
+        controls.enabled = false;
+
+        const tvCenterY = getTVCenterY();
+
+        // Smoothly interpolate the focus distance (zoom)
+        tvFocusDistance = THREE.MathUtils.lerp(tvFocusDistance, tvTargetFocusDistance, 0.08);
+
+        // Smoothly interpolate the look-around offsets
+        currentTvYaw = THREE.MathUtils.lerp(currentTvYaw, tvYaw, 0.1);
+        currentTvPitch = THREE.MathUtils.lerp(currentTvPitch, tvPitch, 0.1);
+
+        // Position the camera directly in front of the TV (X=0, Y=tvCenterY, Z=tvFocusDistance)
+        // (Using lerp for position guarantees a smooth entry glide)
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0.0, 0.06);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, tvCenterY, 0.06);
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, tvFocusDistance, 0.06);
+
+        // Roll camera up-vector to match the TV's hanging roll tilt (rotation.z = 0.16)
+        camera.up.x = THREE.MathUtils.lerp(camera.up.x, -Math.sin(0.16), 0.06);
+        camera.up.y = THREE.MathUtils.lerp(camera.up.y, Math.cos(0.16), 0.06);
+        camera.up.z = 0.0;
+
+        // Look at the target point on the screen Z = 0 plane, shifted by the yaw/pitch offsets
+        const targetX = currentTvYaw;
+        const targetY = tvCenterY + currentTvPitch;
+        const targetZ = 0.0;
+        camera.lookAt(targetX, targetY, targetZ);
+    } else {
+        // If we are currently in the exit focus transition
+        if (isExitingTV) {
+            controls.enabled = false;
+
+            const targetY = THREE.MathUtils.lerp(15.0, 0.45, targetScrollProgress);
+            
+            // Smoothly transition scroll progress (helps sync secondary visual animations)
+            scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.08);
+
+            // Smoothly glide camera position back to the locked state (faster lerp speed)
+            camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0.0, 0.11);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 0.11);
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 10.0, 0.11);
+
+            // Smoothly restore camera up orientation to upright
+            camera.up.x = THREE.MathUtils.lerp(camera.up.x, 0.0, 0.11);
+            camera.up.y = THREE.MathUtils.lerp(camera.up.y, 1.0, 0.11);
+            camera.up.z = 0.0;
+
+            // Smoothly transition look-at target back to the elevator center
+            window.currentExitTargetX = THREE.MathUtils.lerp(window.currentExitTargetX || 0.0, 0.0, 0.11);
+            window.currentExitTargetY = THREE.MathUtils.lerp(window.currentExitTargetY || targetY, targetY, 0.11);
+            camera.lookAt(window.currentExitTargetX, window.currentExitTargetY, 0.0);
+
+            // Check if exit transition is complete (shorter duration for snappier unlock)
+            if (Date.now() - tvExitStartTime >= 400) {
+                isExitingTV = false;
+                controls.enabled = true;
+                controls.target.set(0, targetY, 0);
+                camera.position.set(0, targetY, 10);
+                controls.update();
+            }
+        } else {
+            // Ensure camera up vector is returned to standard upright orientation
+            camera.up.set(0, 1, 0);
+            
+            if (isCameraLocked) {
+                // Disable OrbitControls during elevator scroll transition to prevent interruptions
+                const isTransitioning = Math.abs(scrollProgress - targetScrollProgress) > 0.25;
+                if (isTransitioning) {
+                    controls.enabled = false;
+                } else {
+                    controls.enabled = true;
+                }
+
+                controls.enableZoom = false;
+                // Smoothly interpolate scroll state and apply to camera target (keeping distance constant at 10.0)
+                scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.04);
+                controls.target.y = THREE.MathUtils.lerp(15.0, 0.45, scrollProgress);
+                controls.target.x = THREE.MathUtils.lerp(controls.target.x, 0, 0.06);
+                controls.target.z = THREE.MathUtils.lerp(controls.target.z, 0, 0.06);
+                
+                controls.minDistance = THREE.MathUtils.lerp(controls.minDistance, 10.0, 0.06);
+                controls.maxDistance = THREE.MathUtils.lerp(controls.maxDistance, 10.0, 0.06);
+                
+                // Smoothly lerp polar angle limits to horizontal
+                controls.minPolarAngle = THREE.MathUtils.lerp(controls.minPolarAngle, Math.PI / 2, 0.06);
+                controls.maxPolarAngle = THREE.MathUtils.lerp(controls.maxPolarAngle, Math.PI / 2, 0.06);
+            } else {
+                controls.enabled = true;
+                controls.enableZoom = true;
+                
+                // Smoothly lerp polar angle limits and distance for free camera mode
+                controls.minPolarAngle = THREE.MathUtils.lerp(controls.minPolarAngle, Math.PI / 3, 0.06);
+                controls.maxPolarAngle = THREE.MathUtils.lerp(controls.maxPolarAngle, Math.PI / 2 + 0.05, 0.06);
+                controls.minDistance = THREE.MathUtils.lerp(controls.minDistance, 5.0, 0.06);
+                controls.maxDistance = THREE.MathUtils.lerp(controls.maxDistance, 25.0, 0.06);
+            }
+            
+            controls.update();
+        }
+    }
+
+    // Update TV scene overlay opacity based on camera scene context
+    let tvOverlayOpacity = 0.0;
+    if (isTVFocused) {
+        tvOverlayOpacity = 0.65; // Slightly transparent when fully focused
+    } else if (isCameraLocked) {
+        // Fade in between scrollProgress 0.6 and 0.95
+        tvOverlayOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.6) / 0.35));
+    } else {
+        // Free roaming camera mode: base visibility on camera target Y level
+        const targetY = controls ? controls.target.y : camera.position.y;
+        // TV is at Y=0.45, Monolith is at Y=15.
+        // Fade in below Y=5.0 and reach 1.0 at Y=2.0 or lower
+        tvOverlayOpacity = Math.max(0, Math.min(1, (5.0 - targetY) / 3.0));
+    }
+    
+    const tvOverlayEl = document.getElementById('tv-scene-overlay');
+    if (tvOverlayEl) {
+        tvOverlayEl.style.opacity = tvOverlayOpacity;
+        if (tvOverlayOpacity > 0.05) {
+            tvOverlayEl.style.pointerEvents = 'auto';
+        } else {
+            tvOverlayEl.style.pointerEvents = 'none';
+        }
+    }
+
+    // Update dual tagline text transitions based on camera scrolling context
+    let distorsionaOpacity = 0.0;
+    let comienzaOpacity = 0.0;
+
+    if (isTVFocused) {
+        distorsionaOpacity = 0.0;
+        comienzaOpacity = 0.0; // Disappears when centered/focused on screen
+    } else if (isCameraLocked) {
+        // Cross-fade smoothly between scrollProgress 0.35 and 0.65
+        distorsionaOpacity = Math.max(0, Math.min(1, (0.55 - scrollProgress) / 0.2));
+        comienzaOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.45) / 0.2));
+    } else {
+        // Free camera: cross-fade based on camera height target Y
+        const targetY = controls ? controls.target.y : camera.position.y;
+        distorsionaOpacity = Math.max(0, Math.min(1, (targetY - 5.5) / 4.0));
+        comienzaOpacity = Math.max(0, Math.min(1, (7.5 - targetY) / 4.0));
+    }
+
+    const distEl = document.getElementById('tagline-distorsiona');
+    const comEl = document.getElementById('tagline-comienza');
+    if (distEl) distEl.style.opacity = distorsionaOpacity;
+    if (comEl) comEl.style.opacity = comienzaOpacity;
+
+    // Liquid floor: update time and sun direction uniforms
+    if (liquidFloor && liquidFloor.visible) {
+        liquidFloorMat.uniforms.uTime.value = time * 0.001;
+        if (dirLight) {
+            liquidFloorMat.uniforms.uSunDirection.value.copy(dirLight.position).normalize();
+        }
+    }
+    if (liquidFloorReal && liquidFloorReal.visible) {
+        liquidFloorReal.material.uniforms[ 'time' ].value = time * 0.001 * 0.25;
+        if (dirLight) {
+            liquidFloorReal.material.uniforms[ 'sunDirection' ].value.copy(dirLight.position).normalize();
+        }
+        // Update TV displacement uniforms for THREE.Water shader
+        if (window._waterRealShader) {
+            window._waterRealShader.uniforms.uWaterTime.value = time * 0.001;
+            if (window.tvGroup) {
+                const tvWorldPos = new THREE.Vector3();
+                window.tvGroup.getWorldPosition(tvWorldPos);
+                window._waterRealShader.uniforms.uObjPos.value.set(tvWorldPos.x, tvWorldPos.z);
+            }
+        }
+    }
+    // Update TV displacement uniforms for custom shader too
+    if (liquidFloorMat && window.tvGroup) {
+        const tvWorldPos2 = new THREE.Vector3();
+        window.tvGroup.getWorldPosition(tvWorldPos2);
+        liquidFloorMat.uniforms.uObjPos.value.set(tvWorldPos2.x, tvWorldPos2.z);
+    }
+
+    // Animate and float clouds
+    if (cloudsGroup && clouds.length > 0) {
+        const t = time * 0.001;
+        for (let i = 0; i < clouds.length; i++) {
+            const c = clouds[i];
+            c.rotation.z += c.userData.rotSpeed;
+            c.position.y = c.userData.baseY + Math.sin(t * c.userData.floatSpeed + c.userData.floatPhase) * 0.12;
+        }
+        // Update time uniform shared across the material
+        clouds[0].material.uniforms.uTime.value = t;
+    }
+
+    // Animate rising water particles with horizontal current drift (positive X)
+    if (waterParticles && waterParticleGeometry) {
+        const positions = waterParticleGeometry.attributes.position.array;
+        const colors = waterParticleGeometry.attributes.color.array;
+        const count = positions.length / 3;
+        const driftSpeed = 1.2;
+        
+        for (let i = 0; i < count; i++) {
+            positions[i * 3 + 1] += deltaTime * waterParticleSpeeds[i];
+            positions[i * 3] += deltaTime * driftSpeed;
+            
+            // Recycle particle if it floats too high or too far right
+            if (positions[i * 3 + 1] > 16.0 || positions[i * 3] > 35.0) {
+                // Spawn randomly across the entire X/Z space so they rise uniformly from the whole water surface
+                positions[i * 3] = (Math.random() - 0.5) * 70.0;
+                positions[i * 3 + 1] = -2.0 + Math.random() * 2.0;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 70.0;
+                waterParticleSpeeds[i] = 0.5 + Math.random() * 1.5;
+            }
+
+            const x = positions[i * 3];
+            const y = positions[i * 3 + 1];
+            const z = positions[i * 3 + 2];
+            
+            const ratioY = Math.max(0, Math.min(1, (y - (-2.0)) / 18.0));
+            const fadeY = 1.0 - ratioY;
+            
+            const ratioX = Math.max(0, Math.min(1, Math.abs(x) / 35.0));
+            const fadeX = 1.0 - ratioX;
+            
+            const ratioZ = Math.max(0, Math.min(1, Math.abs(z) / 35.0));
+            const fadeZ = 1.0 - ratioZ;
+            
+            const totalFade = fadeX * fadeY * fadeZ;
+
+            const c = window.waterParticleBaseColors[i];
+            colors[i * 3] = c.r * totalFade;
+            colors[i * 3 + 1] = c.g * totalFade;
+            colors[i * 3 + 2] = c.b * totalFade;
+        }
+        
+        waterParticleGeometry.attributes.position.needsUpdate = true;
+        waterParticleGeometry.attributes.color.needsUpdate = true;
+    }
+
+    renderer.render(scene, camera);
+}
