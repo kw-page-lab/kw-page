@@ -19,11 +19,10 @@ function init() {
     window.isLinuxPlatform = isLinux;
     
     const rendererOptions = {
-        antialias: !isLinux
+        antialias: !isLinux,
+        powerPreference: "high-performance",
+        desynchronized: true
     };
-    if (!isLinux) {
-        rendererOptions.powerPreference = "high-performance";
-    }
     renderer = new THREE.WebGLRenderer(rendererOptions);
     renderer.setPixelRatio(1.0); // Safe cap at 1.0 to prevent GPU crash/thermal shutdown on 4K/HiDPI screens
     renderer.setSize(window.innerWidth, window.innerHeight);

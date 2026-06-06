@@ -7,10 +7,12 @@
     z-index: 1;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
+    will-change: transform;
 }
 canvas {
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
+    will-change: transform;
 }
 
 /* FPS Indicator */

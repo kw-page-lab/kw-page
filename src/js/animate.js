@@ -3,11 +3,41 @@ document.addEventListener('visibilitychange', () => {
     isPageVisible = !document.hidden;
 });
 
+let isPageFocused = document.hasFocus();
+function setFocused() {
+    if (!isPageFocused) {
+        isPageFocused = true;
+        lastFrameTime = performance.now();
+    }
+}
+window.addEventListener('focus', setFocused);
+window.addEventListener('pointerdown', setFocused, { passive: true });
+window.addEventListener('keydown', setFocused, { passive: true });
+window.addEventListener('blur', () => {
+    isPageFocused = false;
+});
+
+let lastRenderTime = 0;
+
 // Animation loop
 let idleFrameCount = 0;
 function animate() {
     requestAnimationFrame(animate);
     if (!isPageVisible) return; // Don't render hidden tabs
+
+    const now = performance.now();
+    
+    // Throttle rendering when unfocused (saves GPU for Wallpaper Engine/system, prevent conflicts)
+    if (!isPageFocused) {
+        const frameInterval = 1000 / 30; // Max 30 FPS when unfocused
+        const elapsed = now - lastRenderTime;
+        if (elapsed < frameInterval - 1) { // 1ms tolerance
+            return;
+        }
+    }
+    lastRenderTime = now;
+    const deltaTime = (now - lastFrameTime) * 0.001;
+    lastFrameTime = now;
 
     // Sync body class with TV focus state
     if (isTVFocused) {
@@ -25,10 +55,6 @@ function animate() {
     if (scrollHint && (scrollProgress > 0.05 || isTVFocused)) {
         scrollHint.classList.remove('show');
     }
-
-    const now = performance.now();
-    const deltaTime = (now - lastFrameTime) * 0.001;
-    lastFrameTime = now;
 
     if (updateTV) {
         updateTV(now * 0.001, deltaTime);
