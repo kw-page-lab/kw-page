@@ -48,9 +48,9 @@ function updateEnvironmentFromTime() {
     // Interpolate floats
     const baseFogNear = k1.fogNear + (k2.fogNear - k1.fogNear) * t;
     const baseFogFar = k1.fogFar + (k2.fogFar - k1.fogFar) * t;
-    const ambInt = k1.ambInt + (k2.ambInt - k1.ambInt) * t;
+    let ambInt = k1.ambInt + (k2.ambInt - k1.ambInt) * t;
     const keyInt = k1.keyInt + (k2.keyInt - k1.keyInt) * t;
-    const emissiveRed = k1.emissiveRed + (k2.emissiveRed - k1.emissiveRed) * t;
+    let emissiveRed = k1.emissiveRed + (k2.emissiveRed - k1.emissiveRed) * t;
     const starOpacity = k1.starOpacity + (k2.starOpacity - k1.starOpacity) * t;
 
     // Zoom-dependent dynamic fog calculations
@@ -71,6 +71,37 @@ function updateEnvironmentFromTime() {
         } else {
             // Zooming in: scale down
             dynamicFogFar = baseFogFar + dD * 0.75;
+        }
+    }
+
+    // --- LERP ACT1 STATE OVERRIDES ---
+    if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+        // 1. Darken background and fog colors towards near pitch black
+        const act1BgColor = new THREE.Color(0x010203);
+        bgColCached.lerp(act1BgColor, window.act1Factor);
+
+        // 2. Pull fog close and dense, but keep letters visible (tuned to be less aggressive)
+        const targetFogNear = isTVFocused ? 7.5 : 9.5;
+        const targetFogFar = isTVFocused ? 18.0 : 25.0;
+        dynamicFogNear = THREE.MathUtils.lerp(dynamicFogNear, targetFogNear, window.act1Factor);
+        dynamicFogFar = THREE.MathUtils.lerp(dynamicFogFar, targetFogFar, window.act1Factor);
+
+        // 3. Ambient light goes near zero (0.01) or pure zero (0.0 when focused on TV)
+        const targetAmbInt = isTVFocused ? 0.0 : 0.01;
+        ambInt = THREE.MathUtils.lerp(ambInt, targetAmbInt, window.act1Factor);
+
+        // 4. Emissive red blocks are dimmed
+        const targetRedEmissive = 0.08;
+        emissiveRed = THREE.MathUtils.lerp(emissiveRed, targetRedEmissive, window.act1Factor);
+
+        // 5. Update close-up traversing mist shader opacity factor
+        if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
+            window.act1MistMaterial.uniforms.uOpacityFactor.value = window.act1Factor;
+        }
+    } else {
+        // Reset mist opacity when Act 1 is inactive
+        if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
+            window.act1MistMaterial.uniforms.uOpacityFactor.value = 0.0;
         }
     }
 
@@ -111,11 +142,21 @@ function updateEnvironmentFromTime() {
             const elevationFactor = Math.sin(sunAngle); // 0 at horizon, 1 at noon
             dirLight.intensity = keyInt * elevationFactor;
         }
+
+        // Lerp key light intensity to 0.0 for Act 1
+        if (typeof window.act1Factor !== 'undefined') {
+            dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 0.0, window.act1Factor);
+        }
     }
 
     // Apply to emissive red blocks (both standard and lambert)
     if (standardRed) standardRed.emissiveIntensity = emissiveRed;
     if (lambertRed) lambertRed.emissiveIntensity = emissiveRed;
+
+    // Apply to TV spotlight from above (swaying lamp)
+    if (window.tvSpotlight && typeof window.act1Factor !== 'undefined') {
+        window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act1Factor);
+    }
 
     // Apply to liquid floor uniforms
     if (liquidFloorMat && liquidFloorMat.uniforms) {
@@ -132,11 +173,21 @@ function updateEnvironmentFromTime() {
 
     // Apply to background particles
     if (starField && starField.material) {
-        starField.material.opacity = starOpacity;
-        starField.visible = (starOpacity > 0.0 && params.particles);
+        // In Act 1, fade out starfield completely
+        let currentStarOpacity = starOpacity;
+        if (typeof window.act1Factor !== 'undefined') {
+            currentStarOpacity = THREE.MathUtils.lerp(starOpacity, 0.0, window.act1Factor);
+        }
+        starField.material.opacity = currentStarOpacity;
+        starField.visible = (currentStarOpacity > 0.0 && params.particles);
     }
 
     // Sync document root background CSS so UI panel blends nicely
     const hexColor = '#' + bgColCached.getHexString();
     document.documentElement.style.setProperty('--bg-color', hexColor);
+
+    // Call updateInteriorLights to sync white letters and interior point lights
+    if (typeof updateInteriorLights === 'function') {
+        updateInteriorLights();
+    }
 }

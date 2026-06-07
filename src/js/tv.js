@@ -5,6 +5,7 @@ function loadTVModel() {
     const tvSpotlight = new THREE.SpotLight(0xffffff, 65.0, 30.0, Math.PI / 4.8, 0.6, 1.2);
     tvSpotlight.position.set(0, 7.5, 4.0);
     scene.add(tvSpotlight);
+    window.tvSpotlight = tvSpotlight;
     
     const tvSpotTarget = new THREE.Object3D();
     tvSpotTarget.position.set(0, -0.7, 0); // Target the TV center
@@ -19,6 +20,7 @@ function loadTVModel() {
             window.updateOverallProgress();
             window.tvGroup = tv.tvGroup;
             window.tvBasePosition = tv.basePosition;
+            window.tvInternalCabinetLight = tv.internalCabinetLight;
             
             // Reposition TV base position under the monolith — submerged deeper into the water
             tv.basePosition.set(0.31, -2.5, 0);

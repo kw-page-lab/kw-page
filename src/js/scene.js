@@ -258,6 +258,12 @@ function init() {
     const toggleBtn = document.getElementById('toggleLockCam');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', () => {
+            // Disable lock toggle under Act 1
+            if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+                console.log("[Act 1] Camera lock is forced. Unlocking is disabled.");
+                return;
+            }
+
             if (Math.abs(scrollProgress - targetScrollProgress) > 0.25 || isExitingTV) return;
             
             if (isTVFocused) {
