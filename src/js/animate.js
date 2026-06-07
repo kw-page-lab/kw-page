@@ -39,6 +39,31 @@ function animate() {
     const deltaTime = (now - lastFrameTime) * 0.001;
     lastFrameTime = now;
 
+    // Smooth transition for Act 1 filter (takes ~1.5 seconds)
+    const act1TransitionSpeed = 1.0 / 1.5;
+    if (window.act1Factor < window.act1Target) {
+        window.act1Factor = Math.min(window.act1Target, window.act1Factor + deltaTime * act1TransitionSpeed);
+    } else if (window.act1Factor > window.act1Target) {
+        window.act1Factor = Math.max(window.act1Target, window.act1Factor - deltaTime * act1TransitionSpeed);
+    }
+
+    // Auto-focus on TV when scrolling down to bottom in Act 1 mode
+    if (window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
+        isTVFocused = true;
+        window.tvFocusStartTime = Date.now();
+        tvYaw = 0;
+        tvPitch = 0;
+        currentTvYaw = 0;
+        currentTvPitch = 0;
+        const targetDist = getTVTargetFocusDistance();
+        tvFocusDistance = targetDist;
+        tvTargetFocusDistance = targetDist;
+        isCameraLocked = true;
+        if (typeof updateCameraLockUI === 'function') {
+            updateCameraLockUI();
+        }
+    }
+
     // Sync body class with TV focus state
     if (isTVFocused) {
         if (!document.body.classList.contains('tv-focused')) {
@@ -58,6 +83,10 @@ function animate() {
 
     if (updateTV) {
         updateTV(now * 0.001, deltaTime);
+    }
+    // Damp cabinet internal light intensity based on Act 1 factor
+    if (window.tvInternalCabinetLight) {
+        window.tvInternalCabinetLight.intensity *= (1.0 - window.act1Factor);
     }
     if (window.tvBezelLight && window.tvCrtLight) {
         window.tvBezelLight.color.copy(window.tvCrtLight.color);
@@ -268,6 +297,13 @@ function animate() {
                 controls.target.set(0, targetY, 0);
                 camera.position.set(0, targetY, 10);
                 controls.update();
+
+                // If a scroll-up is pending in Act 1, trigger it now!
+                if (window.act1ScrollUpPending) {
+                    console.log('[Act 1] Zoom-out complete. Transitioning to vertical scroll-up to monolith.');
+                    targetScrollProgress = 0.0;
+                    window.act1ScrollUpPending = false;
+                }
             }
         } else {
             // Ensure camera up vector is returned to standard upright orientation
@@ -397,6 +433,37 @@ function animate() {
         }
         // Update time uniform shared across the material
         clouds[0].material.uniforms.uTime.value = t;
+
+        // Animate close-up traversing mist planes for Act 1
+        if (window.act1MistPlanes && window.act1MistPlanes.length > 0) {
+            for (let i = 0; i < window.act1MistPlanes.length; i++) {
+                const m = window.act1MistPlanes[i];
+                // Float X across the screen
+                m.position.x += deltaTime * m.userData.speedX;
+                
+                // Wrap around X depending on drift direction
+                if (m.userData.speedX > 0 && m.position.x > 24.0) {
+                    m.position.x = -24.0;
+                    m.position.y = m.userData.baseY + (Math.random() - 0.5) * 4.0;
+                } else if (m.userData.speedX < 0 && m.position.x < -24.0) {
+                    m.position.x = 24.0;
+                    m.position.y = m.userData.baseY + (Math.random() - 0.5) * 4.0;
+                }
+                
+                // Slow rotation in camera plane
+                m.userData.currentRot += m.userData.rotSpeed * deltaTime * 12.0;
+                m.quaternion.copy(camera.quaternion);
+                m.rotateZ(m.userData.currentRot);
+                
+                // Slow vertical bobbing
+                m.position.y = m.userData.baseY + Math.sin(t * m.userData.floatSpeed + m.userData.floatPhase) * 0.35;
+            }
+        }
+        
+        // Update time uniform for Act 1 mist material
+        if (window.act1MistMaterial) {
+            window.act1MistMaterial.uniforms.uTime.value = t;
+        }
     }
 
     // Animate rising water particles with horizontal current drift (positive X)

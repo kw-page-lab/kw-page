@@ -270,6 +270,26 @@ function setupUIEventListeners() {
 
     window.addEventListener('wheel', e => {
         if (isTVFocused) {
+            // In Act 1 mode, if they scroll UP, exit focus and snap up to monolith!
+            if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+                if (e.deltaY < 0) { // scroll up
+                    console.log('[Act 1] Wheel scroll up detected while focused on TV. Triggering zoom-out.');
+                    isTVFocused = false;
+                    isExitingTV = true;
+                    tvExitStartTime = Date.now();
+                    window.currentExitTargetX = currentTvYaw;
+                    const tvCenterY = getTVCenterY();
+                    window.currentExitTargetY = tvCenterY + currentTvPitch;
+                    
+                    isCameraLocked = true;
+                    scrollProgress = 1.0;
+                    targetScrollProgress = 1.0; // Keep Y at TV level during zoom-out
+                    window.act1ScrollUpPending = true; // Trigger vertical scroll-up on completion
+                    updateCameraLockUI();
+                }
+                return;
+            }
+
             const baseDist = getTVTargetFocusDistance();
             const exitThreshold = baseDist - 0.3;
             const minFocusLimit = baseDist - 0.4;
@@ -308,8 +328,9 @@ function setupUIEventListeners() {
     // Touch drag support for mobile devices to snap transition
     let touchStartYLocal = 0;
     window.addEventListener('touchstart', e => {
-        if (isTVFocused || isExitingTV) return;
-        if (!isCameraLocked) return;
+        if (isExitingTV) return;
+        // In Act 1, track swipe starting point even when focused on TV
+        if (!isCameraLocked && !isTVFocused) return;
         if (e.touches.length === 1) {
             touchStartYLocal = e.touches[0].pageY;
         }
@@ -320,6 +341,27 @@ function setupUIEventListeners() {
             if (e.touches.length === 1) {
                 const touchY = e.touches[0].pageY;
                 const deltaY = touchStartYLocal - touchY;
+                
+                // In Act 1 mode, exit focus on a simple swipe up
+                if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+                    if (deltaY < -15) { // Swipe up / drag down gesture
+                        console.log('[Act 1] Touch swipe up detected while focused on TV. Triggering zoom-out.');
+                        isTVFocused = false;
+                        isExitingTV = true;
+                        tvExitStartTime = Date.now();
+                        window.currentExitTargetX = currentTvYaw;
+                        const tvCenterY = getTVCenterY();
+                        window.currentExitTargetY = tvCenterY + currentTvPitch;
+                        
+                        isCameraLocked = true;
+                        scrollProgress = 1.0;
+                        targetScrollProgress = 1.0; // Keep Y at TV level during zoom-out
+                        window.act1ScrollUpPending = true; // Trigger vertical scroll-up on completion
+                        updateCameraLockUI();
+                    }
+                    return;
+                }
+
                 const exitThresholdTouch = getTVTargetFocusDistance() - 0.3;
                 if (tvTargetFocusDistance <= exitThresholdTouch && deltaY < -80) { // Require larger drag down when zoomed in to exit focus on mobile
                     isTVFocused = false;

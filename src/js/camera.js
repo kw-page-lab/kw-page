@@ -72,3 +72,17 @@ function updateReflectionCamera() {
     reflTextureMatrix.multiply(reflCamera.projectionMatrix);
     reflTextureMatrix.multiply(reflCamera.matrixWorldInverse);
 }
+
+// Act 1 special sequence state variables
+window.act1Factor = 0.0;
+window.act1Target = 0.0;
+
+window.setAct1 = function(active) {
+    window.act1Target = active ? 1.0 : 0.0;
+    if (active) {
+        document.body.classList.add('act1-active');
+    } else {
+        document.body.classList.remove('act1-active');
+    }
+    console.log(`[Act 1] State set to: ${active} (target: ${window.act1Target})`);
+};

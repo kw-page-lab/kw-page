@@ -114,6 +114,57 @@ function createClouds() {
         side: THREE.DoubleSide
     });
 
+    // Mist shader material (separate from cloudMat to control opacity with act1Factor)
+    const mistMat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime:  { value: 0 },
+            uColor: { value: new THREE.Color(0x020304) }, // deep dark charcoal grey
+            uNoiseTex: { value: noiseTex },
+            uOpacityFactor: { value: 0.0 } // 0.0 initially, controlled by act1Factor
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform float uTime;
+            uniform vec3 uColor;
+            uniform sampler2D uNoiseTex;
+            uniform float uOpacityFactor;
+            varying vec2 vUv;
+
+            void main() {
+                float dist = length(vUv - 0.5);
+                float alphaMask = smoothstep(0.5, 0.15, dist);
+
+                vec2 p1 = vUv * 0.35 + vec2(uTime * 0.015, uTime * 0.01);
+                vec2 p2 = vUv * 0.7 - vec2(uTime * 0.01, -uTime * 0.007);
+                
+                float n1 = texture2D(uNoiseTex, p1).r;
+                float n2 = texture2D(uNoiseTex, p2).g;
+                float n = (n1 + n2 * 0.5) / 1.5;
+                
+                float density = smoothstep(0.08, 0.65, n);
+                
+                // Deep black/greyish mist color
+                vec3 col = mix(uColor, vec3(0.0, 0.0, 0.01), density * 0.45);
+                
+                // Scale opacity with uOpacityFactor (use NormalBlending to darken the background)
+                float alpha = density * alphaMask * 0.85 * uOpacityFactor;
+
+                gl_FragColor = vec4(col, alpha);
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.NormalBlending, // Obscures and darkens background elements
+        side: THREE.DoubleSide
+    });
+    window.act1MistMaterial = mistMat;
+
     // Create 12 large billboard planes in the far distance
     const cloudGeo = new THREE.PlaneGeometry(28, 20);
     for(let i = 0; i < 12; i++) {
@@ -142,6 +193,40 @@ function createClouds() {
         
         cloudsGroup.add(cloud);
         clouds.push(cloud);
+    }
+
+    // Create 10 close-up traversing mist planes for Act 1
+    window.act1MistPlanes = [];
+    const mistGeo = new THREE.PlaneGeometry(24, 18);
+    for (let i = 0; i < 10; i++) {
+        const mist = new THREE.Mesh(mistGeo, mistMat);
+        // Distribute Y across the entire vertical height from water (Y=-2) to top of monolith (Y=18)
+        const baseY = -2.0 + (i / 9) * 20.0; // Spaced evenly from -2.0 to 18.0
+        
+        // Distribute Z between -2.0 (behind TV/monolith center) and 3.5 (in front of them, but far enough from camera)
+        const baseZ = -2.0 + Math.random() * 5.5;
+        
+        // Bidirectional drift direction
+        const direction = Math.random() < 0.5 ? 1.0 : -1.0;
+        
+        mist.position.set(
+            (Math.random() - 0.5) * 24.0,
+            baseY,
+            baseZ
+        );
+        
+        mist.userData = {
+            speedX: (0.22 + Math.random() * 0.28) * direction, // drift speed and direction
+            floatSpeed: 0.3 + Math.random() * 0.3,
+            floatPhase: Math.random() * Math.PI * 2,
+            baseY: baseY,
+            baseZ: baseZ,
+            currentRot: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 0.012
+        };
+        
+        cloudsGroup.add(mist);
+        window.act1MistPlanes.push(mist);
     }
 }
 
