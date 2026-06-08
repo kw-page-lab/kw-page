@@ -196,7 +196,7 @@ canvas {
 }
 
 /* Act 1 transition overlay / styling */
-body.act1-active {
+body.act1-active, body.darkness-filter-active {
     background-color: #010203 !important;
 }
 
@@ -224,6 +224,6 @@ body.act1-active .tv-overlay-container {
 }
 
 /* Fullscreen subtle vignetting vignette overlay */
-body.act1-active .vignette-overlay {
+body.act1-active .vignette-overlay, body.darkness-filter-active .vignette-overlay {
     background: radial-gradient(circle, rgba(0,0,0,0) 20%, rgba(0,0,0,0.7) 55%, rgba(0,0,0,0.98) 100%) !important;
 }
