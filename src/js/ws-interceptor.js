@@ -100,6 +100,12 @@
                         } else if (data.type === 'apply_preset' && data.presetId !== 'act1') {
                             if (typeof window.setAct1 === 'function') window.setAct1(false);
                         }
+                    } else if (data.type === 'filter') {
+                        if (data.filterMode === 'darkness') {
+                            if (typeof window.setAct1 === 'function') window.setAct1(true);
+                        } else if (data.filterMode === 'default' || data.filterMode === 'normal') {
+                            if (typeof window.setAct1 === 'function') window.setAct1(false);
+                        }
                     } else if (data.type === 'reset') {
                         if (typeof window.setAct1 === 'function') window.setAct1(false);
                     }
