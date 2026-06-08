@@ -48,7 +48,7 @@ function animate() {
     }
 
     // Auto-focus on TV when scrolling down to bottom in Act 1 mode
-    if (window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
+    if (document.body.classList.contains('act1-active') && window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
         isTVFocused = true;
         window.tvFocusStartTime = Date.now();
         tvYaw = 0;

@@ -81,8 +81,20 @@ window.setAct1 = function(active) {
     window.act1Target = active ? 1.0 : 0.0;
     if (active) {
         document.body.classList.add('act1-active');
+        document.body.classList.remove('darkness-filter-active');
     } else {
         document.body.classList.remove('act1-active');
     }
     console.log(`[Act 1] State set to: ${active} (target: ${window.act1Target})`);
+};
+
+window.setDarknessFilter = function(active) {
+    window.act1Target = active ? 1.0 : 0.0;
+    if (active) {
+        document.body.classList.add('darkness-filter-active');
+        document.body.classList.remove('act1-active');
+    } else {
+        document.body.classList.remove('darkness-filter-active');
+    }
+    console.log(`[Darkness Filter] State set to: ${active} (target: ${window.act1Target})`);
 };
