@@ -89,6 +89,9 @@
                 }
                 
                 if (data) {
+                    const wantsFocusLock = data.focusLock === true || data.cameraLock === true;
+                    const wantsUIBlocked = data.uiBlocked === true || data.blockUI === true;
+
                     if (data.type === 'apply_preset' || data.type === 'trigger_video') {
                         const isAct1 = data.presetId === 'act1' || 
                                        data.act1 === true ||
@@ -96,9 +99,19 @@
                                        (data.videoUrl && data.videoUrl.toLowerCase().includes('act1'));
                         
                         if (isAct1) {
-                            if (typeof window.setAct1 === 'function') window.setAct1(true);
+                            if (typeof window.setAct1 === 'function') {
+                                window.setAct1(true, { focusLock: wantsFocusLock, uiBlocked: wantsUIBlocked });
+                            }
                         } else if (data.type === 'apply_preset' && data.presetId !== 'act1') {
                             if (typeof window.setAct1 === 'function') window.setAct1(false);
+                        }
+
+                        // Apply individual lock/block states depending on the context if specified
+                        if (typeof window.setAct1FocusLock === 'function') {
+                            window.setAct1FocusLock(wantsFocusLock);
+                        }
+                        if (typeof window.setAct1UIBlocked === 'function') {
+                            window.setAct1UIBlocked(wantsUIBlocked);
                         }
                     } else if (data.type === 'filter') {
                         if (data.filterMode === 'darkness') {
@@ -114,9 +127,18 @@
                                 window.setAct1(false);
                             }
                         }
+                        // Apply individual lock/block states even on filter messages
+                        if (typeof window.setAct1FocusLock === 'function') {
+                            window.setAct1FocusLock(wantsFocusLock);
+                        }
+                        if (typeof window.setAct1UIBlocked === 'function') {
+                            window.setAct1UIBlocked(wantsUIBlocked);
+                        }
                     } else if (data.type === 'reset') {
                         if (typeof window.setAct1 === 'function') window.setAct1(false);
                         if (typeof window.setDarknessFilter === 'function') window.setDarknessFilter(false);
+                        if (typeof window.setAct1FocusLock === 'function') window.setAct1FocusLock(false);
+                        if (typeof window.setAct1UIBlocked === 'function') window.setAct1UIBlocked(false);
                     }
                 }
             } catch(e) {

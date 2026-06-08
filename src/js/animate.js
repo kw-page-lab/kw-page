@@ -47,8 +47,8 @@ function animate() {
         window.act1Factor = Math.max(window.act1Target, window.act1Factor - deltaTime * act1TransitionSpeed);
     }
 
-    // Auto-focus on TV when scrolling down to bottom in Act 1 mode
-    if (document.body.classList.contains('act1-active') && window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
+    // Auto-focus on TV when scrolling down to bottom in Act 1 mode (only if focus lock is enabled)
+    if (document.body.classList.contains('act1-focus-lock') && window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
         isTVFocused = true;
         window.tvFocusStartTime = Date.now();
         tvYaw = 0;
