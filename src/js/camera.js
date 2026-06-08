@@ -77,13 +77,39 @@ function updateReflectionCamera() {
 window.act1Factor = 0.0;
 window.act1Target = 0.0;
 
-window.setAct1 = function(active) {
+window.setAct1FocusLock = function(active) {
+    if (active) {
+        document.body.classList.add('act1-focus-lock');
+    } else {
+        document.body.classList.remove('act1-focus-lock');
+    }
+    console.log(`[Act 1 Focus Lock] State set to: ${active}`);
+};
+
+window.setAct1UIBlocked = function(active) {
+    if (active) {
+        document.body.classList.add('act1-ui-blocked');
+    } else {
+        document.body.classList.remove('act1-ui-blocked');
+    }
+    console.log(`[Act 1 UI Block] State set to: ${active}`);
+};
+
+window.setAct1 = function(active, options = {}) {
     window.act1Target = active ? 1.0 : 0.0;
     if (active) {
         document.body.classList.add('act1-active');
         document.body.classList.remove('darkness-filter-active');
+        if (options && options.focusLock) {
+            window.setAct1FocusLock(true);
+        }
+        if (options && options.uiBlocked) {
+            window.setAct1UIBlocked(true);
+        }
     } else {
         document.body.classList.remove('act1-active');
+        window.setAct1FocusLock(false);
+        window.setAct1UIBlocked(false);
     }
     console.log(`[Act 1] State set to: ${active} (target: ${window.act1Target})`);
 };
@@ -98,3 +124,4 @@ window.setDarknessFilter = function(active) {
     }
     console.log(`[Darkness Filter] State set to: ${active} (target: ${window.act1Target})`);
 };
+

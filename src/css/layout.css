@@ -200,26 +200,26 @@ body.act1-active, body.darkness-filter-active {
     background-color: #010203 !important;
 }
 
-/* Apply dark/foggy aesthetic to UI elements */
-body.act1-active .topbar,
-body.act1-active .control-panel,
-body.act1-active .sidebar-panel,
-body.act1-active .social-action-btn,
-body.act1-active .camera-lock-btn,
-body.act1-active .round-action-btn {
+/* Apply dark/foggy aesthetic to UI elements when UI blocking is explicitly enabled */
+body.act1-ui-blocked .topbar,
+body.act1-ui-blocked .control-panel,
+body.act1-ui-blocked .sidebar-panel,
+body.act1-ui-blocked .social-action-btn,
+body.act1-ui-blocked .camera-lock-btn,
+body.act1-ui-blocked .round-action-btn {
     filter: brightness(0.25) contrast(1.1) saturate(0.6);
     opacity: 0.35;
-    pointer-events: none; /* Make UI non-interactive during Act 1 sequence */
+    pointer-events: none; /* Make UI non-interactive when explicitly blocked */
 }
 
-/* Keep the tagline text readable but moody */
-body.act1-active .top-tagline-container {
+/* Keep the tagline text readable but moody under Act 1 / Darkness */
+body.act1-active .top-tagline-container, body.darkness-filter-active .top-tagline-container {
     filter: brightness(0.75) contrast(1.1);
     opacity: 0.85;
 }
 
 /* Keep the TV overlay container legible or completely dark */
-body.act1-active .tv-overlay-container {
+body.act1-active .tv-overlay-container, body.darkness-filter-active .tv-overlay-container {
     filter: brightness(0.6) contrast(1.2);
 }
 

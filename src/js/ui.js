@@ -270,8 +270,8 @@ function setupUIEventListeners() {
 
     window.addEventListener('wheel', e => {
         if (isTVFocused) {
-            // In Act 1 mode, if they scroll UP, exit focus and snap up to monolith!
-            if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+            // In Act 1 mode, if they scroll UP, exit focus and snap up to monolith! (only if focus lock is enabled)
+            if (document.body.classList.contains('act1-focus-lock') && typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
                 if (e.deltaY < 0) { // scroll up
                     console.log('[Act 1] Wheel scroll up detected while focused on TV. Triggering zoom-out.');
                     isTVFocused = false;
@@ -342,8 +342,8 @@ function setupUIEventListeners() {
                 const touchY = e.touches[0].pageY;
                 const deltaY = touchStartYLocal - touchY;
                 
-                // In Act 1 mode, exit focus on a simple swipe up
-                if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+                // In Act 1 mode, exit focus on a simple swipe up (only if focus lock is enabled)
+                if (document.body.classList.contains('act1-focus-lock') && typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
                     if (deltaY < -15) { // Swipe up / drag down gesture
                         console.log('[Act 1] Touch swipe up detected while focused on TV. Triggering zoom-out.');
                         isTVFocused = false;

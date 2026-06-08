@@ -258,8 +258,8 @@ function init() {
     const toggleBtn = document.getElementById('toggleLockCam');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', () => {
-            // Disable lock toggle under Act 1
-            if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
+            // Disable lock toggle under Act 1 only if focus lock is enabled
+            if (document.body.classList.contains('act1-focus-lock') && typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.5) {
                 console.log("[Act 1] Camera lock is forced. Unlocking is disabled.");
                 return;
             }
