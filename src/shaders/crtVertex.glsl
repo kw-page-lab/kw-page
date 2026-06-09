@@ -1,4 +1,5 @@
 varying vec2 vUv;
+varying float vFogDepth;
 void main() {
   vUv = uv;
   vec3 pos = position;
@@ -17,5 +18,7 @@ void main() {
   // Max center bulge: +0.07. Corners descend to approx -0.04 (approx 4 centimeters)
   pos.z += factor * 0.07;
   
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  vFogDepth = -mvPosition.z;
 }

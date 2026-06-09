@@ -14,7 +14,11 @@ uniform float uScaleX;
 uniform float uScaleY;
 uniform float uIsVideo;
 uniform float uPowerOff;
+uniform vec3 uFogColor;
+uniform float uFogNear;
+uniform float uFogFar;
 varying vec2 vUv;
+varying float vFogDepth;
 
 // ─────────────────────────────────────────────
 // NOISE UTILITIES
@@ -478,6 +482,10 @@ void main() {
   // KILL outside barrel frame
   // ─────────────────────────────────────────────
   screenContent *= inFrame;
+
+  // Apply distance-based depth fog (capped to 0.95 so the screen almost completely disappears)
+  float fogFactor = clamp((vFogDepth - uFogNear) / (uFogFar - uFogNear), 0.0, 0.95);
+  screenContent = mix(screenContent, uFogColor, fogFactor);
 
   gl_FragColor = vec4(screenContent, 1.0);
 }

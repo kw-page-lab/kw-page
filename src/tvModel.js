@@ -29,6 +29,9 @@ const getMeshBoundingBox = (object) => {
 
 export function loadTV(scene, controls, spotlight, spotTarget) {
   const gltfLoader = new GLTFLoader();
+  if (typeof MeshoptDecoder !== 'undefined') {
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+  }
 
   const modelPromise = new Promise((resolve, reject) => {
     gltfLoader.load(
@@ -68,7 +71,7 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
       tvGroup.add(tvModel);
 
       tvModel.position.set(0, 0, 0);
-      tvModel.rotation.set(0, 0, 0);
+      tvModel.rotation.set(0, Math.PI, 0);
       tvModel.scale.set(1, 1, 1);
       tvModel.updateMatrixWorld(true);
 
@@ -86,7 +89,6 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
       tvModel.position.y = -scaledBox.min.y;
       tvModel.position.z = -scaledCenter.z;
       
-      tvModel.rotation.y = Math.PI;
       tvModel.updateMatrixWorld(true);
 
       tvModel.traverse((child) => {
@@ -94,8 +96,14 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
           child.castShadow = true;
           child.receiveShadow = true;
           if (child.material) {
-            child.material.roughness = Math.max(child.material.roughness, 0.45);
-            child.material.metalness = Math.min(child.material.metalness, 0.8);
+            // Matte, opaque plastic material (low metalness, high roughness)
+            child.material.metalness = 0.05;
+            child.material.roughness = 0.75;
+            
+            // Brighten up the material base color to make the casing details visible in the dark scene
+            if (child.material.color) {
+              child.material.color.multiplyScalar(1.5);
+            }
           }
         }
       });
@@ -121,14 +129,17 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
           uScaleX: { value: 1.0 },
           uScaleY: { value: 1.0 },
           uIsVideo: { value: 0.0 },
-          uPowerOff: { value: 0.0 }
+          uPowerOff: { value: 0.0 },
+          uFogColor: { value: new THREE.Color(0x121526) },
+          uFogNear: { value: 9.0 },
+          uFogFar: { value: 25.0 }
         }
       });
 
       const crtScreen = new THREE.Mesh(crtGeometry, crtMaterial);
       
       const frontZ = scaledBox.max.z - scaledCenter.z;
-      crtScreen.position.set(0.0, 1.30, frontZ + 2.01); 
+      crtScreen.position.set(0.0, 1.30, frontZ - 0.08); 
       tvGroup.add(crtScreen);
 
       const crtLight = new THREE.SpotLight(
@@ -139,27 +150,28 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
         0.95,
         1.1
       );
-      crtLight.position.set(0.0, 1.30, frontZ + 2.05);
+      crtLight.position.set(0.0, 1.30, frontZ - 0.04);
       
       const crtLightTarget = new THREE.Object3D();
-      crtLightTarget.position.set(0.0, 0.0, frontZ + 5.5);
+      crtLightTarget.position.set(0.0, 0.0, frontZ + 3.5);
       tvGroup.add(crtLightTarget);
       crtLight.target = crtLightTarget;
       tvGroup.add(crtLight);
 
       const internalCabinetLight = new THREE.SpotLight(0xff5511, 14.0, 3.2, Math.PI / 2.5, 0.9, 2.0);
-      internalCabinetLight.position.set(0.0, 1.30, frontZ + 0.3);
+      internalCabinetLight.position.set(0.0, 1.30, frontZ - 1.7);
       
       const internalTarget = new THREE.Object3D();
-      internalTarget.position.set(0.0, 1.30, frontZ - 0.5);
+      internalTarget.position.set(0.0, 1.30, frontZ - 2.5);
       tvGroup.add(internalTarget);
       internalCabinetLight.target = internalTarget;
       tvGroup.add(internalCabinetLight);
 
-      tvGroup.position.set(0.0, 0.0, 12.0);
+      const basePosition = new THREE.Vector3(0.0, 0.0, 12.0);
+      tvGroup.position.copy(basePosition);
 
-      controls.target.set(0, 1.30, 12.0);
-      spotTarget.position.set(0, 1.30, 12.0);
+      controls.target.set(basePosition.x, basePosition.y + 1.30, basePosition.z);
+      spotTarget.position.set(basePosition.x, basePosition.y + 1.30, basePosition.z);
       spotlight.target = spotTarget;
 
       let _isHolding = false;
@@ -214,12 +226,12 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
           const shakeAmp = Math.min(buildupFrac * 0.032, 0.032);
           if (shakeAmp > 0.001) {
             tvGroup.position.set(
-              (Math.random() - 0.5) * shakeAmp,
-              (Math.random() - 0.5) * shakeAmp,
-              12.0 + (Math.random() - 0.5) * shakeAmp
+              basePosition.x + (Math.random() - 0.5) * shakeAmp,
+              basePosition.y + (Math.random() - 0.5) * shakeAmp,
+              basePosition.z + (Math.random() - 0.5) * shakeAmp
             );
           } else {
-            tvGroup.position.set(0.0, 0.0, 12.0);
+            tvGroup.position.copy(basePosition);
           }
 
         } else if (_decayDuration > 0.0) {
@@ -233,7 +245,7 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
             const burstVal = Math.min(_releaseIntensity + burstPeak, 1.4);
             crtMaterial.uniforms.uMagneticIntensity.value = burstVal;
             crtMaterial.uniforms.uMagneticBuildup.value = burstVal;
-            tvGroup.position.set(0.0, 0.0, 12.0);
+            tvGroup.position.copy(basePosition);
 
           } else {
             const t = Math.min(_decayElapsed / _decayDuration, 1.0);
@@ -244,15 +256,15 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
               crtMaterial.uniforms.uMagneticIntensity.value = 0.0;
               crtMaterial.uniforms.uMagneticBuildup.value = 0.0;
               _decayDuration = 0.0;
-              tvGroup.position.set(0.0, 0.0, 12.0);
+              tvGroup.position.copy(basePosition);
             } else {
               crtMaterial.uniforms.uMagneticIntensity.value = current;
               crtMaterial.uniforms.uMagneticBuildup.value = current;
               const shakeAmp = current * 0.032;
               tvGroup.position.set(
-                (Math.random() - 0.5) * shakeAmp,
-                (Math.random() - 0.5) * shakeAmp,
-                12.0 + (Math.random() - 0.5) * shakeAmp
+                basePosition.x + (Math.random() - 0.5) * shakeAmp,
+                basePosition.y + (Math.random() - 0.5) * shakeAmp,
+                basePosition.z + (Math.random() - 0.5) * shakeAmp
               );
             }
           }
@@ -261,13 +273,20 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
           crtMaterial.uniforms.uMagneticVelocity.value.set(0.0, 0.0);
           if (inTransition) {
             tvGroup.position.set(
-              (Math.random() - 0.5) * 0.012,
-              (Math.random() - 0.5) * 0.012,
-              12.0 + (Math.random() - 0.5) * 0.012
+              basePosition.x + (Math.random() - 0.5) * 0.012,
+              basePosition.y + (Math.random() - 0.5) * 0.012,
+              basePosition.z + (Math.random() - 0.5) * 0.012
             );
           } else {
-            tvGroup.position.set(0.0, 0.0, 12.0);
+            tvGroup.position.copy(basePosition);
           }
+        }
+
+        // Synchronize scene fog parameters to screen shader uniforms
+        if (scene.fog) {
+          crtMaterial.uniforms.uFogColor.value.copy(scene.fog.color);
+          crtMaterial.uniforms.uFogNear.value = scene.fog.near;
+          crtMaterial.uniforms.uFogFar.value = scene.fog.far;
         }
 
         updateScreenManager(crtMaterial.uniforms, elapsedTime, deltaTime);
@@ -294,6 +313,7 @@ export function loadTV(scene, controls, spotlight, spotTarget) {
         crtScreen,
         crtLight,
         internalCabinetLight,
+        basePosition,
         update,
         destroy,
         startMagneticHold,

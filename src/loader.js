@@ -17,8 +17,12 @@ let done = false;
 function setProgress(pct, label) {
   if (done) return;
   const clamped = Math.min(Math.max(Math.round(pct), 0), 100);
-  barFill.style.width = `${clamped}%`;
-  if (label) loadingText.textContent = label;
+  if (barFill) {
+    barFill.style.width = `${clamped}%`;
+  }
+  if (label && loadingText) {
+    loadingText.textContent = label;
+  }
 }
 
 export function setMilestone(key, value) {
@@ -68,7 +72,10 @@ export function finishLoading() {
   setProgress(100, 'Listo.');
 
   setTimeout(() => {
-    splash.classList.add('done');
-    splash.addEventListener('animationend', () => splash.remove(), { once: true });
+    if (splash) {
+      splash.classList.add('done');
+      splash.addEventListener('animationend', () => splash.remove(), { once: true });
+    }
   }, 350);
 }
+

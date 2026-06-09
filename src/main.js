@@ -17,6 +17,8 @@ const overlay = initOverlay();
 milestoneComplete('overlay');
 
 const lights = initLights(scene);
+window.sceneLights = lights;
+window.mainScene = scene;
 milestoneComplete('lights');
 
 const particles = initParticles(scene);

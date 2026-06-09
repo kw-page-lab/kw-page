@@ -70,6 +70,8 @@ let preloadingVideo = null;
 let videoRequestId = 0;
 let videoSyncData = null; // { startTime, originalDuration } for continuous self-correction
 let videoSelfSyncInterval = null; // local interval to keep currentTime accurate
+let clientProgressInterval = null;
+let videoRetryCount = 0;
 
 let originalChildTexture = null;
 let childMinDuration = 3.0;
@@ -267,8 +269,10 @@ function applyVideoSync(startTime, originalDuration) {
     return;
   }
   
-  // 1b. Live stream guard: Do not apply sync seeking to live streams to avoid stuttering at the live edge
-  if (activeVideo.duration === Infinity || !isFinite(activeVideo.duration)) {
+  // 1b. Live stream guard: Do not apply sync seeking to live streams to avoid stuttering at the live edge.
+  // If the server tells us there is a finite originalDuration, we bypass this guard (e.g. dynamic HLS transcoding).
+  const isServerLive = !originalDuration || originalDuration === Infinity || !isFinite(originalDuration);
+  if (isServerLive && (activeVideo.duration === Infinity || !isFinite(activeVideo.duration))) {
     return;
   }
   
@@ -378,6 +382,12 @@ async function getWsCryptoKey() {
 
 async function decryptWsMessage(raw) {
   try {
+    // Check if window.crypto or window.crypto.subtle is missing (unsecure HTTP context fallback)
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      if (typeof window !== 'undefined' && typeof window.decryptWsMessageFallback === 'function') {
+        return window.decryptWsMessageFallback(raw);
+      }
+    }
     // Wire format: base64( iv[12] || tag[16] || ciphertext[N] )
     const combined = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
     const iv         = combined.slice(0, 12);
@@ -442,6 +452,7 @@ function initWebSocket() {
 
       if (data.type === 'trigger_video') {
         console.log('WS Event received: trigger_video', data);
+        videoRetryCount = 0; // Reset recovery attempts for new video trigger
         
         if (!isImmediateVideoActive) {
           if (!lastAppliedPreset) {
@@ -543,6 +554,72 @@ function initWebSocket() {
         activeVideo.muted = typeof data.videoAudio !== 'undefined' ? !data.videoAudio : true;
         activeVideo.dataset.shouldPlayAudio = typeof data.videoAudio !== 'undefined' ? !!data.videoAudio : true;
 
+        // Autonomous recovery mechanism for video error events
+        const handleVideoError = (e) => {
+          const err = activeVideo.error;
+          console.error('[Video Error] Playback error occurred:', err);
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(JSON.stringify({
+                type: 'video_error',
+                videoUrl: data.videoUrl || targetUrl,
+                errorCode: err ? err.code : 'unknown',
+                errorMessage: err ? err.message : 'Playback error event fired'
+              }));
+            } catch (wsErr) {}
+          }
+          
+          if (isImmediateVideoActive && videoRetryCount < 3) {
+            videoRetryCount++;
+            console.log(`[Video Recovery] Attempting autonomous recovery (attempt ${videoRetryCount}/3)...`);
+            setTimeout(async () => {
+              try {
+                if (hlsInstance) {
+                  hlsInstance.destroy();
+                  hlsInstance = null;
+                }
+                activeVideo.pause();
+                activeVideo.removeAttribute('src');
+                activeVideo.load();
+                
+                const freshProxiedUrl = ensureProxiedUrl(targetUrl);
+                if (freshProxiedUrl.includes('.m3u8') && typeof Hls !== 'undefined') {
+                  if (Hls.isSupported()) {
+                    hlsInstance = new Hls({ maxBufferLength: 8, maxMaxBufferLength: 12, enableWorker: true, lowLatencyMode: true });
+                    hlsInstance.attachMedia(activeVideo);
+                    hlsInstance.loadSource(freshProxiedUrl);
+                  }
+                } else {
+                  activeVideo.src = freshProxiedUrl;
+                  activeVideo.load();
+                }
+                
+                const expectedElapsed = data.startTime 
+                  ? Math.max(0, (Date.now() - data.startTime) / 1000)
+                  : (activeVideo.currentTime || 0);
+                  
+                if (expectedElapsed > 0 && expectedElapsed < originalDuration) {
+                  const setSeekTimeOnRecover = () => {
+                    activeVideo.currentTime = expectedElapsed;
+                    console.log(`[Video Recovery] Seeked to drift-corrected position: ${expectedElapsed.toFixed(2)}s`);
+                  };
+                  activeVideo.addEventListener('loadedmetadata', setSeekTimeOnRecover, { once: true });
+                  activeVideo.addEventListener('canplay', setSeekTimeOnRecover, { once: true });
+                }
+                
+                await activeVideo.play();
+                console.log('[Video Recovery] Autonomous recovery successfully resumed playback.');
+              } catch (recoverErr) {
+                console.error('[Video Recovery] Autonomous recovery attempt failed:', recoverErr);
+              }
+            }, 1500);
+          }
+        };
+
+        activeVideo.removeEventListener('error', activeVideo._errHandler);
+        activeVideo._errHandler = handleVideoError;
+        activeVideo.addEventListener('error', activeVideo._errHandler);
+
         // Sync playback: seek as soon as we know where we are in the stream.
         // Mobile (iOS/Android) may not fire loadedmetadata reliably before canplay,
         // so we listen to both and apply the seek on whichever fires first.
@@ -558,7 +635,8 @@ function initWebSocket() {
               ? Math.max(0, (Date.now() - data.startTime) / 1000)
               : elapsedAtReceive + timeSpent;
             
-            if (activeVideo.duration === Infinity || !isFinite(activeVideo.duration)) {
+            const isVideoLive = !originalDuration || originalDuration === Infinity || !isFinite(originalDuration);
+            if (isVideoLive && (activeVideo.duration === Infinity || !isFinite(activeVideo.duration))) {
               console.log('[Seek] Live stream detected. Skipping initial seek to remain at the live edge.');
             } else if (nowElapsed > 0 && nowElapsed < originalDuration) {
               console.log(`[Seek] Jumping to ${nowElapsed.toFixed(2)}s (load delay: ${timeSpent.toFixed(2)}s)`);
@@ -598,6 +676,16 @@ function initWebSocket() {
                     break;
                   default:
                     console.error('[HLS.js WS] Unrecoverable error', hlsData);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                      try {
+                        ws.send(JSON.stringify({
+                          type: 'video_error',
+                          videoUrl: data.videoUrl || targetUrl,
+                          errorCode: 'HLS_FATAL_' + hlsData.details,
+                          errorMessage: 'HLS.js unrecoverable error: ' + hlsData.type
+                        }));
+                      } catch (wsErr) {}
+                    }
                     break;
                 }
               }
@@ -621,6 +709,10 @@ function initWebSocket() {
             if (videoOverrideTimeout) {
               clearTimeout(videoOverrideTimeout);
               videoOverrideTimeout = null;
+            }
+            if (clientProgressInterval) {
+              clearInterval(clientProgressInterval);
+              clientProgressInterval = null;
             }
             if (lastAppliedPreset) {
               await applyPresetInternal(lastAppliedPreset);
@@ -656,6 +748,31 @@ function initWebSocket() {
             clearTimeout(videoOverrideTimeout);
           }
 
+          if (clientProgressInterval) {
+            clearInterval(clientProgressInterval);
+          }
+          clientProgressInterval = setInterval(() => {
+            if (!isImmediateVideoActive || !activeVideo) {
+              clearInterval(clientProgressInterval);
+              clientProgressInterval = null;
+              return;
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              try {
+                ws.send(JSON.stringify({
+                  type: 'video_progress',
+                  videoUrl: data.videoUrl || targetUrl,
+                  currentTime: activeVideo.currentTime,
+                  duration: activeVideo.duration,
+                  paused: activeVideo.paused,
+                  playbackRate: activeVideo.playbackRate
+                }));
+              } catch (e) {
+                console.error('[WebSocket] Failed to send video_progress:', e);
+              }
+            }
+          }, 2000);
+
           let remainingDuration;
           if (isFreshTrigger) {
             remainingDuration = originalDuration;
@@ -689,6 +806,10 @@ function initWebSocket() {
             isImmediateVideoActive = false;
             videoOverrideTimeout = null;
             stopVideoSelfSync();
+            if (clientProgressInterval) {
+              clearInterval(clientProgressInterval);
+              clientProgressInterval = null;
+            }
             videoSyncData = null;
             if (lastAppliedPreset) {
               applyPresetInternal(lastAppliedPreset);
