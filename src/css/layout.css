@@ -1,0 +1,229 @@
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    will-change: transform;
+}
+canvas {
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    will-change: transform;
+}
+
+/* FPS Indicator */
+#fps {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-family: monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    z-index: 10;
+    background: rgba(0,0,0,0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Camera Vignette Overlay */
+.vignette-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    background: radial-gradient(circle, rgba(0,0,0,0) 45%, rgba(18,21,38,0.3) 70%, rgba(6,7,19,0.82) 100%);
+    mix-blend-mode: multiply;
+}
+
+/* Top Tagline CSS styling */
+.top-tagline-container {
+    position: fixed;
+    top: 6vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 800px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    pointer-events: none;
+    user-select: none;
+}
+
+.top-tagline {
+    position: absolute;
+    color: #ffffff;
+    font-size: clamp(20px, 3.5vw, 36px);
+    font-family: 'SLNTHLN', sans-serif;
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.95);
+    text-align: center;
+    transition: opacity 0.3s ease-in-out;
+    white-space: nowrap;
+}
+
+/* TV Scene Specific Overlay */
+.tv-overlay-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 1.5vh;
+    z-index: 8;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in-out;
+    user-select: none;
+}
+
+.logo-img {
+    width: 23vw;
+    max-width: 250px;
+    min-width: 150px;
+    height: auto;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+    margin-bottom: 0.8vh;
+}
+
+.logo-img:hover {
+    transform: scale(1.05);
+}
+
+.coming-soon-text {
+    color: #ffffff;
+    font-size: clamp(16px, 2.5vw, 24px);
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 8px #000;
+    font-family: 'SLNTHLN', sans-serif;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.footer-credit {
+    font-family: 'Outfit', sans-serif;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    margin-top: 5px;
+    text-shadow: 1px 1px 3px #000;
+    text-transform: uppercase;
+}
+
+#easter-egg-word {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color 0.2s ease-in-out, text-shadow 0.2s ease-in-out;
+}
+
+#easter-egg-word:hover {
+    color: var(--accent-red);
+    text-shadow: 0 0 10px rgba(246, 1, 1, 0.8);
+}
+
+/* Scroll Down Hint Indicator */
+.scroll-hint {
+    position: fixed;
+    top: 92vh; /* Positioned lower on PC */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 90;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+    pointer-events: none;
+}
+.scroll-hint.show {
+    opacity: 1.0; /* Fully visible */
+    visibility: visible;
+}
+.scroll-hint-text {
+    font-family: 'SLNTHLN', sans-serif;
+    font-size: 12px; /* Slightly larger text */
+    letter-spacing: 3px;
+    color: #ffffff; /* Pure white for maximum visibility */
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.9), 0 2px 4px rgba(0, 0, 0, 1);
+    font-weight: 300;
+}
+.scroll-hint-chevron-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--accent-red);
+    filter: drop-shadow(0 0 6px rgba(246, 1, 1, 0.7));
+    animation: pulse-bounce 1.6s infinite ease-in-out;
+}
+@keyframes pulse-bounce {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    50% {
+        transform: translateY(6px);
+        opacity: 1;
+    }
+}
+
+/* Global Transitions for UI Elements */
+.topbar,
+.control-panel,
+.sidebar-panel,
+.top-tagline-container,
+.social-action-btn,
+.camera-lock-btn,
+.round-action-btn,
+.tv-overlay-container,
+.vignette-overlay {
+    transition: filter 1.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.5s ease-in-out, background 1.5s ease-in-out;
+}
+
+/* Act 1 transition overlay / styling */
+body.act1-active, body.darkness-filter-active {
+    background-color: #010203 !important;
+}
+
+/* Apply dark/foggy aesthetic to UI elements when UI blocking is explicitly enabled */
+body.act1-ui-blocked .topbar,
+body.act1-ui-blocked .control-panel,
+body.act1-ui-blocked .sidebar-panel,
+body.act1-ui-blocked .social-action-btn,
+body.act1-ui-blocked .camera-lock-btn,
+body.act1-ui-blocked .round-action-btn {
+    filter: brightness(0.25) contrast(1.1) saturate(0.6);
+    opacity: 0.35;
+    pointer-events: none; /* Make UI non-interactive when explicitly blocked */
+}
+
+/* Keep the tagline text readable but moody under Act 1 / Darkness */
+body.act1-active .top-tagline-container, body.darkness-filter-active .top-tagline-container {
+    filter: brightness(0.75) contrast(1.1);
+    opacity: 0.85;
+}
+
+/* Keep the TV overlay container legible or completely dark */
+body.act1-active .tv-overlay-container, body.darkness-filter-active .tv-overlay-container {
+    filter: brightness(0.6) contrast(1.2);
+}
+
+/* Fullscreen subtle vignetting vignette overlay */
+body.act1-active .vignette-overlay, body.darkness-filter-active .vignette-overlay {
+    background: radial-gradient(circle, rgba(0,0,0,0) 20%, rgba(0,0,0,0.7) 55%, rgba(0,0,0,0.98) 100%) !important;
+}

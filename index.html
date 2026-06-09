@@ -1,388 +1,144 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <script>
-    (function() {
-      if (window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') {
-        const noop = function() {};
-        console.log = noop;
-        console.warn = noop;
-        console.error = noop;
-        console.info = noop;
-        console.debug = noop;
-      }
-    })();
-  </script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="KimeraWare Fansite by MetaCodeX">
-  <title>KimeraWare</title>
-  <link rel="icon" type="image/png" href="/favicon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100;200;300;400;600&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Sixtyfour&display=swap" rel="stylesheet">
-  <style>
-    @font-face {
-      font-family: 'SLNTHLN';
-      src: url('/SLNTHLN.TTF') format('truetype');
-      font-weight: 100 900;
-      font-style: normal;
-    }
-
-    #top-overlay {
-      position: fixed;
-      top: 3.5vh;
-      left: 50%;
-      transform: translateX(-50%);
-      pointer-events: none;
-      user-select: none;
-      z-index: 10;
-      width: 90vw;
-      max-width: 1200px;
-      display: flex;
-      justify-content: center;
-    }
-
-    #top-tagline {
-      color: rgba(255, 255, 255, 0.85);
-      font-family: 'Outfit', sans-serif;
-      font-size: clamp(10px, 1.5vw, 15px);
-      font-weight: 200;
-      letter-spacing: 5px;
-      text-align: center;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-      text-transform: uppercase;
-      white-space: nowrap;
-      margin: 0;
-    }
-
-    .mobile-only {
-      display: none;
-    }
-
-    #loading-splash {
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #030303;
-      transition: opacity 0.8s ease-out;
-    }
-
-    #loading-splash.done {
-      animation: loading-fade 800ms ease-out forwards;
-    }
-
-    .loading-logo {
-      font-size: clamp(18px, 3.5vw, 32px);
-      font-weight: 300;
-      letter-spacing: 8px;
-      color: #ffffff;
-      animation: loading-pulse 2s ease-in-out infinite;
-      font-family: SLNTHLN, Arial, sans-serif;
-      margin-bottom: 1.5rem;
-    }
-
-    .loading-bar-track {
-      width: 180px;
-      height: 2px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 2px;
-      overflow: hidden;
-      position: relative;
-    }
-
-    #loading-bar-fill {
-      height: 100%;
-      width: 0%;
-      background: #3b82f6;
-      box-shadow: 0 0 8px #3b82f6;
-      transition: width 0.4s cubic-bezier(0.1, 0.8, 0.2, 1);
-    }
-
-    #loading-text {
-      margin-top: 1rem;
-      font-family: SLNTHLN, Arial, sans-serif;
-      font-size: 10px;
-      font-weight: 200;
-      color: rgba(255, 255, 255, 0.45);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      text-align: center;
-    }
-
-    @keyframes loading-fade {
-      0% { opacity: 1; }
-      100% { opacity: 0; pointer-events: none; }
-    }
-
-    @keyframes loading-pulse {
-      0%, 100% { opacity: 0.35; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.02); }
-    }
-
-    #kw-overlay {
-      position: fixed;
-      bottom: 2.2vh;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.4em;
-      pointer-events: none;
-      user-select: none;
-      z-index: 10;
-    }
-
-    #kw-overlay a {
-      pointer-events: auto;
-      display: inline-block;
-      line-height: 0;
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    #kw-logo {
-      width: clamp(110px, 16vw, 240px);
-      height: auto;
-      opacity: 0.75;
-      filter: drop-shadow(0 0 10px rgba(160, 200, 255, 0.50))
-              drop-shadow(0 0 3px  rgba(160, 200, 255, 0.30));
-      transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    #kw-overlay a:hover #kw-logo {
-      opacity: 0.95;
-    }
-
-    #kw-overlay a:hover {
-      transform: scale(1.03);
-    }
-
-    #kw-tagline {
-      color: #fff;
-      font-family: SLNTHLN, Arial, sans-serif;
-      font-size: clamp(13px, 2.2vw, 22px);
-      font-weight: 100;
-      font-synthesis: none;
-      letter-spacing: 3px;
-      text-align: center;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-      white-space: nowrap;
-      margin: 0;
-      opacity: 0.80;
-    }
-
-    #kw-credits {
-      color: rgba(255, 255, 255, 0.5);
-      font-family: SLNTHLN, Arial, sans-serif;
-      font-size: clamp(9px, 1.4vw, 13px);
-      font-weight: 100;
-      font-synthesis: none;
-      letter-spacing: 2px;
-      text-align: center;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-      white-space: nowrap;
-      margin: 0;
-    }
-
-    #kw-credits a {
-      color: rgba(255, 255, 255, 0.85);
-      text-decoration: none;
-      pointer-events: auto;
-      transition: color 0.3s ease, text-shadow 0.3s ease;
-    }
-
-    #kw-credits a:hover {
-      color: #3b82f6;
-      text-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
-    }
-
-    .kw-glitch-active {
-      position: relative;
-      color: #ff3b30 !important;
-      text-shadow: 
-        -2px 0 0 #00ffff,
-        2px 0 0 #ff00ff,
-        0 0 8px rgba(255, 59, 48, 0.8) !important;
-      animation: kwGlitchAnim 0.2s infinite steps(2), kwJitterAnim 0.1s infinite !important;
-      display: inline-block;
-    }
-
-    @keyframes kwGlitchAnim {
-      0% {
-        text-shadow: -2px 0 0 #00ffff, 2px 0 0 #ff00ff, 0 0 8px rgba(255, 59, 48, 0.8);
-      }
-      50% {
-        text-shadow: 2px 0 0 #00ffff, -2px 0 0 #ff00ff, 0 0 4px rgba(255, 59, 48, 0.5);
-      }
-    }
-
-    @keyframes kwJitterAnim {
-      0%, 100% { transform: translate(0, 0); }
-      10% { transform: translate(-0.5px, -0.5px); }
-      20% { transform: translate(0.5px, 0.5px); }
-      30% { transform: translate(-1px, 0); }
-      40% { transform: translate(0.8px, -0.3px); }
-      50% { transform: translate(-0.5px, 0.5px); }
-      60% { transform: translate(1px, 0.3px); }
-      70% { transform: translate(-0.8px, -0.5px); }
-      80% { transform: translate(0.5px, -0.8px); }
-      90% { transform: translate(-0.3px, 1px); }
-    }
-
-    @media (max-width: 768px) {
-      #top-overlay {
-        top: 2vh;
-        width: 92vw;
-      }
-      #top-tagline {
-        font-size: clamp(10px, 3.2vw, 13px);
-        letter-spacing: 3px;
-        white-space: normal;
-        line-height: 1.5;
-      }
-      .mobile-only {
-        display: block;
-      }
-      #kw-overlay {
-        bottom: 2.5vh;
-        gap: 0.2em;
-      }
-      #kw-tagline {
-        font-size: clamp(11px, 4vw, 16px);
-        letter-spacing: 2px;
-      }
-      #kw-credits {
-        font-size: clamp(8px, 2.8vw, 11px);
-        letter-spacing: 1.5px;
-      }
-    }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
-  <script type="module" crossorigin src="/assets/index-C9fW4tlL.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-WqNOAS6Y.css">
+    <script>
+        (function() {
+            if (window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') {
+                const noop = function() {};
+                console.log = noop;
+                console.warn = noop;
+                console.error = noop;
+                console.info = noop;
+                console.debug = noop;
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>KimeraWare</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Sixtyfour&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="src/css/variables.css">
+    <link rel="stylesheet" href="src/css/fonts.v2.css?v=act4">
+    <link rel="stylesheet" href="src/css/loader.css">
+    <link rel="stylesheet" href="src/css/layout.css?v=act5">
+    <link rel="stylesheet" href="src/css/controls.css">
+    <link rel="stylesheet" href="src/css/sidebar.css">
+    <link rel="stylesheet" href="src/css/responsive.css">
 </head>
 <body>
-  <div id="loading-splash">
-    <div class="loading-logo">CARGANDO...</div>
-    <div class="loading-bar-track">
-      <div id="loading-bar-fill"></div>
+    <div class="vignette-overlay"></div>
+
+    <div id="loading-overlay">
+        <!-- Hidden elements for the TV bundle to write its status to -->
+        <div style="display: none;">
+            <div id="loading-bar-fill"></div>
+            <div id="loading-text"></div>
+        </div>
+        
+        <!-- Visible premium loader content -->
+        <div class="loader-content">
+            <img src="kimeraware.webp" alt="KimeraWare" class="loader-logo">
+            <div class="loader-bar-outer">
+                <div id="visible-loading-bar-fill"></div>
+            </div>
+            <div id="visible-loading-text">0%</div>
+        </div>
+
+        <!-- Hidden by default, shown only if loading fails -->
+        <div id="loading-status" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Cargando Modelo 3D...</div>
+        <div id="loading-details" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Conectando con el archivo GLB local para un renderizado ultra r&#225;pido...</div>
     </div>
-    <p id="loading-text">Iniciando...</p>
-  </div>
 
-  <main id="app-container">
-    <h1 class="visually-hidden">Escena Interactiva 3D con Foco de Luz y Shaders de Oscuridad</h1>
-    <canvas id="webgl-canvas" aria-label="Escena 3D interactiva"></canvas>
-  </main>
+    <div id="canvas-container"></div>
+    <div id="fps">FPS: --</div>
 
-  <div id="top-overlay">
-    <p id="top-tagline">DONDE LA REALIDAD SE DISTORSIONA,<br class="mobile-only"> EL JUEGO COMIENZA.</p>
-  </div>
+    <!-- Top Tagline Container using HollowThriller font -->
+    <div class="top-tagline-container">
+        <div id="tagline-distorsiona" class="top-tagline">DONDE LA REALIDAD SE DISTORSIONA...</div>
+        <div id="tagline-comienza" class="top-tagline" style="opacity: 0;">EL JUEGO COMIENZA.</div>
+    </div>
 
-  <div id="kw-overlay">
-    <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer">
-      <img id="kw-logo" src="/logo.png" alt="Kimeraware" draggable="false">
+    <!-- TV Scene Specific Overlay (Only visible in TV Scene) -->
+    <div id="tv-scene-overlay" class="tv-overlay-container">
+        <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer">
+            <img src="logo_temp.png" alt="Kimeraware Logo" class="logo-img" />
+        </a>
+        <div class="coming-soon-text">PROXIMAMENTE...</div>
+        <div class="footer-credit">
+            webpage by <span id="easter-egg-word">metacodex</span>
+        </div>
+    </div>
+
+
+
+
+
+    <!-- Scroll Down Hint Indicator -->
+    <div id="scroll-hint-indicator" class="scroll-hint">
+        <span class="scroll-hint-text">DESLIZA HACIA ABAJO</span>
+        <div class="scroll-hint-chevron-container">
+            <svg class="scroll-hint-chevron" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+            <svg class="scroll-hint-chevron" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" style="margin-top: -12px;">
+                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Camera Lock Button -->
+    <button id="toggleLockCam" class="camera-lock-btn" title="Bloquear/Liberar C&#225;mara">
+        <span id="camera-lock-icon" style="display: flex; align-items: center; justify-content: center;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+            </svg>
+        </span>
+    </button>
+
+    <!-- Social Link Buttons (aligned under camera lock button) -->
+    <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer" id="youtubeLinkBtn" class="round-action-btn social-btn-youtube" title="Visitar YouTube de Kimeraware">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M23.498 6.163c-.272-1.016-1.07-1.815-2.085-2.087C19.56 3.5 12 3.5 12 3.5s-7.56 0-9.413.576C1.57 4.348.773 5.147.502 6.163.003 8.01 0 12 0 12s.003 3.99.502 5.837c.271 1.016 1.07 1.815 2.085 2.087C4.44 20.5 12 20.5 12 20.5s7.56 0 9.413-.576c1.015-.272 1.813-1.071 2.085-2.087.5-1.847.502-5.837.502-5.837s-.002-3.99-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+        </svg>
     </a>
-    <p id="kw-tagline">PROXIMAMENTE...</p>
-    <p id="kw-credits">WebPage By <a target="_blank" rel="noopener noreferrer"></a></p>
-  </div>
+    
+    <a href="https://x.com/KimeraWare" target="_blank" rel="noopener noreferrer" id="twitterLinkBtn" class="round-action-btn social-btn-twitter" title="Visitar Twitter de Kimeraware">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+    </a>
 
-  <script>
-    (function() {
-      function dec(hex) {
-        let key = 'kw';
-        if (key.startsWith('%') && key.endsWith('%')) {
-          key = 'kw';
-        }
-        let res = '';
-        for (let i = 0; i < hex.length; i += 2) {
-          const byte = parseInt(hex.substring(i, i + 2), 16);
-          const keyChar = key.charCodeAt((i / 2) % key.length);
-          res += String.fromCharCode(byte ^ keyChar);
-        }
-        return res;
-      }
-
-      const link = document.querySelector('#kw-credits a');
-      if (!link) return;
-
-      // Populate credit values dynamically to keep them encrypted in raw markup
-      link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
-      link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
-      
-      const startTime = Date.now();
-      let isMacrostasis = false;
-      
-      function updateCredits() {
-        const now = Date.now();
-        // Bloquear durante el primer minuto completo (60000 ms) tras la carga de la página
-        if (now - startTime < 60000) {
-          if (isMacrostasis) {
-            isMacrostasis = false;
-            link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
-            link.classList.remove(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
-          }
-          link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
-          return;
-        }
-
-        const nowSec = new Date().getSeconds();
-        // 20 segundos distribuidos durante todo el minuto:
-        // - [5, 7]   (2s)
-        // - [12, 15] (3s)
-        // - [22, 23] (1s)
-        // - [30, 34] (4s)
-        // - [40, 42] (2s)
-        // - [46, 49] (3s)
-        // - [53, 58] (5s)
-        // Total = 2 + 3 + 1 + 4 + 2 + 3 + 5 = 20 segundos
-        const intervals = [
-          { start: 5, end: 7 },
-          { start: 12, end: 15 },
-          { start: 22, end: 23 },
-          { start: 30, end: 34 },
-          { start: 40, end: 42 },
-          { start: 46, end: 49 },
-          { start: 53, end: 58 }
-        ];
-        
-        const shouldBeMacro = intervals.some(interval => nowSec >= interval.start && nowSec < interval.end);
-        
-        if (shouldBeMacro !== isMacrostasis) {
-          isMacrostasis = shouldBeMacro;
-          if (isMacrostasis) {
-            link.textContent = dec('2616080504241f16181e18'); // 'MacroStasis'
-            link.classList.add(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
-            link.removeAttribute('href'); // Evitar que el clic navegue
-          } else {
-            link.textContent = dec('26121f1628180f1233'); // 'MetaCodeX'
-            link.classList.remove(dec('00004610071e1f14035a0a141f1e1d12')); // 'kw-glitch-active'
-            link.href = dec('03031f07184d44580616080504041f16181e18590f121d'); // 'https://macrostasis.dev'
-          }
-        }
-      }
-      
-      // Capturar clic para el easter egg
-      link.addEventListener('click', function(e) {
-        if (isMacrostasis) {
-          e.preventDefault();
-          const triggerFn = window[dec('1f0502100c1219320a041f1219320c10')]; // 'triggerEasterEgg'
-          if (triggerFn) {
-            triggerFn();
-          }
-        }
-      });
-      
-      setInterval(updateCredits, 200);
-      updateCredits();
-    })();
-  </script>
-  <!-- Fun is Infinite with Sega Enterprises (1/7) -->
+    <!-- Import Three.js, OrbitControls and GLTFLoader -->
+    <script src="src/js/ws-interceptor.js?v=act5"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="src/js/colormanagement-polyfill.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/meshopt_decoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Water.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+    <script src="src/js/forge-fallback.js"></script>
+    <script src="tv-bundle.umd.js"></script>
+    <script src="src/js/autoreload.js"></script>
+    <script src="src/js/config.js"></script>
+    <script src="src/js/loader-manager.js"></script>
+    <script src="src/js/environment.js?v=act4"></script>
+    <script src="src/js/particles.js"></script>
+    <script src="src/js/lights.js?v=act4"></script>
+    <script src="src/js/floor.js"></script>
+    <script src="src/js/atmosphere.js?v=act4"></script>
+    <script src="src/js/monolith.js"></script>
+    <script src="src/js/tv.js?v=act4"></script>
+    <script src="src/js/camera.js?v=act5"></script>
+    <script src="src/js/ui.js?v=act5"></script>
+    <script src="src/js/animate.js?v=act5"></script>
+    <script src="src/js/scene.js?v=act5"></script>
+    <script src="src/js/main.js"></script>
 </body>
 </html>
