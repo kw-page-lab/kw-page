@@ -125,8 +125,16 @@
                                 const duration = window.audioOnlyDuration || 60;
 
                                 if (elapsed >= duration) {
-                                    window.audioOnlyActive = false;
-                                    window.overrideTvTexture = null;
+                                    const isVideoActive = window.tvVideoElement && !window.tvVideoElement.paused && window.tvVideoElement.src;
+                                    if (!isVideoActive) {
+                                        window.audioOnlyActive = false;
+                                        window.overrideTvTexture = null;
+                                        console.log('[WebSocket Interceptor] Audio-only sequence completed and video player stopped. Deactivating override.');
+                                    } else {
+                                        // Keep showing static noise to prevent any frame leak until the video player is actually stopped by the TV bundle
+                                        updateStaticNoise();
+                                        window.overrideTvTexture = staticTexture;
+                                    }
                                 } else {
                                     // 1. First 11 seconds (poweroff 5s + grass grow 6s): silence, show black background
                                     if (elapsed < 11.0) {
