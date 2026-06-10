@@ -9,6 +9,7 @@
     window.tvVideoElement = null;
     window.audioOnlyActive = false;
     window.audioOnlyDuration = 60;
+    window.tvOriginalIsVideoVal = 0;
 
     // Static noise texture generator to display clean static at the end
     let staticCanvas = null;
@@ -110,6 +111,7 @@
                                     },
                                     set(val) {
                                         originalIsVideoVal = val;
+                                        window.tvOriginalIsVideoVal = val;
                                     },
                                     configurable: true
                                 });
@@ -125,13 +127,12 @@
                                 const duration = window.audioOnlyDuration || 60;
 
                                 if (elapsed >= duration) {
-                                    const isVideoActive = window.tvVideoElement && !window.tvVideoElement.paused && window.tvVideoElement.src;
-                                    if (!isVideoActive) {
+                                    if (window.tvOriginalIsVideoVal !== 1) {
                                         window.audioOnlyActive = false;
                                         window.overrideTvTexture = null;
-                                        console.log('[WebSocket Interceptor] Audio-only sequence completed and video player stopped. Deactivating override.');
+                                        console.log('[WebSocket Interceptor] Audio-only sequence completed and TV mode is no longer video. Deactivating override.');
                                     } else {
-                                        // Keep showing static noise to prevent any frame leak until the video player is actually stopped by the TV bundle
+                                        // Keep showing static noise to prevent any frame leak until the TV bundle actually exits video mode
                                         updateStaticNoise();
                                         window.overrideTvTexture = staticTexture;
                                     }
