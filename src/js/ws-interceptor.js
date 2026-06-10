@@ -86,7 +86,15 @@
                                 let originalTextureVal = uTextureUniform.value;
                                 Object.defineProperty(uTextureUniform, 'value', {
                                     get() {
-                                        if (window.audioOnlyActive) {
+                                        // Block the raw video texture from leaking through in these cases:
+                                        // 1. While audioOnly override is active
+                                        // 2. Even AFTER audioOnly deactivates, if the TV shader still thinks
+                                        //    it's in video mode (uIsVideo===1). This prevents the 1-frame
+                                        //    flash that occurs in the same RAF tick audioOnlyActive goes false.
+                                        // 3. If overrideTvTexture is still set (black handoff state): the
+                                        //    sequence just ended but the server's black_screen preset hasn't
+                                        //    arrived yet — keep showing black until that message clears it.
+                                        if (window.audioOnlyActive || window.tvOriginalIsVideoVal === 1 || window.overrideTvTexture) {
                                             return window.overrideTvTexture || getBlackTexture();
                                         }
                                         return originalTextureVal;
@@ -127,12 +135,22 @@
                                 const duration = window.audioOnlyDuration || 60;
 
                                 if (elapsed >= duration) {
-                                    if (window.tvOriginalIsVideoVal !== 1) {
+                                    // Only deactivate when the TV shader has EXPLICITLY confirmed it left
+                                    // video mode (uIsVideo === 0). Not "!== 1" — we want the exact value.
+                                    if (window.tvOriginalIsVideoVal === 0) {
+                                        // CRITICAL: set overrideTvTexture to BLACK *before* flipping
+                                        // audioOnlyActive to false. The uTexture getter checks
+                                        // audioOnlyActive on every RAF frame; if we null the override
+                                        // in the same tick we deactivate, there is a 1-frame window
+                                        // where audioOnlyActive===false but the video element is still
+                                        // loaded, allowing a raw video frame to bleed through.
+                                        // Keeping black here is safe: the server will send
+                                        // apply_preset:black_screen within milliseconds anyway.
+                                        window.overrideTvTexture = getBlackTexture();
                                         window.audioOnlyActive = false;
-                                        window.overrideTvTexture = null;
-                                        console.log('[WebSocket Interceptor] Audio-only sequence completed and TV mode is no longer video. Deactivating override.');
+                                        console.log('[WebSocket Interceptor] Audio-only sequence completed; uIsVideo confirmed 0. Holding black texture for handoff to black_screen preset.');
                                     } else {
-                                        // Keep showing static noise to prevent any frame leak until the TV bundle actually exits video mode
+                                        // Still in video mode → keep static noise on screen
                                         updateStaticNoise();
                                         window.overrideTvTexture = staticTexture;
                                     }
