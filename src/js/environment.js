@@ -74,6 +74,11 @@ function updateEnvironmentFromTime() {
         }
     }
 
+    // --- ACT2 FACTOR (driven entirely by act2.js) ---
+    if (typeof window.act2Factor === 'undefined') {
+        window.act2Factor = 0.0;
+    }
+
     // --- LERP ACT1 STATE OVERRIDES ---
     if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
         // 1. Darken background and fog colors towards near pitch black
@@ -99,9 +104,35 @@ function updateEnvironmentFromTime() {
             window.act1MistMaterial.uniforms.uOpacityFactor.value = window.act1Factor;
         }
     } else {
-        // Reset mist opacity when Act 1 is inactive
-        if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
+        // Reset mist opacity when Act 1 is inactive (Act 2 may still activate it below)
+        if (window.act1MistMaterial && window.act1MistMaterial.uniforms && !(typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0)) {
             window.act1MistMaterial.uniforms.uOpacityFactor.value = 0.0;
+        }
+    }
+
+    // --- LERP ACT2 STATE OVERRIDES ---
+    if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.001) {
+        const f = window.act2Factor;
+
+        // 1. Near-black background — much darker than default
+        bgColCached.lerp(new THREE.Color(0x000102), f);
+
+        // 2. Fog: very tight and dense — you can clearly see it
+        dynamicFogNear = THREE.MathUtils.lerp(dynamicFogNear, 4.0,  f);
+        dynamicFogFar  = THREE.MathUtils.lerp(dynamicFogFar,  15.0, f);
+
+        // 3. Ambient almost zero — but not pitch black (eerie residual glow)
+        ambInt = THREE.MathUtils.lerp(ambInt, 0.02, f);
+
+        // 4. Red emissive blocks heavily attenuated
+        emissiveRed = THREE.MathUtils.lerp(emissiveRed, 0.06, f);
+
+        // 5. Mist shader — share act1MistMaterial
+        if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
+            window.act1MistMaterial.uniforms.uOpacityFactor.value = Math.max(
+                window.act1MistMaterial.uniforms.uOpacityFactor.value,
+                f
+            );
         }
     }
 
@@ -143,9 +174,11 @@ function updateEnvironmentFromTime() {
             dirLight.intensity = keyInt * elevationFactor;
         }
 
-        // Lerp key light intensity to 0.0 for Act 1
-        if (typeof window.act1Factor !== 'undefined') {
+        // Lerp key light to 0 for ACT1, and to 40% for ACT2 (semi-dim, not off)
+        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
             dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 0.0, window.act1Factor);
+        } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
+            dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, dirLight.intensity * 0.4, window.act2Factor);
         }
     }
 
@@ -153,9 +186,26 @@ function updateEnvironmentFromTime() {
     if (standardRed) standardRed.emissiveIntensity = emissiveRed;
     if (lambertRed) lambertRed.emissiveIntensity = emissiveRed;
 
-    // Apply to TV spotlight from above (swaying lamp)
-    if (window.tvSpotlight && typeof window.act1Factor !== 'undefined') {
-        window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act1Factor);
+    // Apply to TV spotlight — ACT1 kills it, ACT2 widens it (angle) and boosts slightly
+    if (window.tvSpotlight) {
+        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+            window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act1Factor);
+        } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
+            // Keep intensity but open the cone angle wider
+            window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 90.0, window.act2Factor);
+            if (window.tvSpotlight.angle !== undefined) {
+                window.tvSpotlight.angle = THREE.MathUtils.lerp(
+                    Math.PI / 6,        // default ~30°
+                    Math.PI / 3.2,      // ACT2 wider ~56°
+                    window.act2Factor
+                );
+            }
+        } else {
+            // Reset cone angle when neither act is active
+            if (window.tvSpotlight.angle !== undefined) {
+                window.tvSpotlight.angle = THREE.MathUtils.lerp(window.tvSpotlight.angle, Math.PI / 6, 0.05);
+            }
+        }
     }
 
     // Apply to liquid floor uniforms
@@ -166,6 +216,14 @@ function updateEnvironmentFromTime() {
         if (liquidFloorMat.uniforms.uFogFar) liquidFloorMat.uniforms.uFogFar.value = dynamicFogFar;
     }
 
+    // Apply to grass uniforms
+    if (window.act2GrassMesh && window.act2GrassMesh.material && window.act2GrassMesh.material.uniforms) {
+        const gu = window.act2GrassMesh.material.uniforms;
+        if (gu.uFogColor) gu.uFogColor.value.copy(bgColCached);
+        if (gu.uFogNear) gu.uFogNear.value = dynamicFogNear;
+        if (gu.uFogFar) gu.uFogFar.value = dynamicFogFar;
+    }
+
     // Apply to atmospheric clouds
     if (clouds.length > 0 && clouds[0].material && clouds[0].material.uniforms && clouds[0].material.uniforms.uColor) {
         clouds[0].material.uniforms.uColor.value.copy(cloudColCached);
@@ -173,10 +231,13 @@ function updateEnvironmentFromTime() {
 
     // Apply to background particles
     if (starField && starField.material) {
-        // In Act 1, fade out starfield completely
         let currentStarOpacity = starOpacity;
-        if (typeof window.act1Factor !== 'undefined') {
+        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+            // ACT1: fade out completely
             currentStarOpacity = THREE.MathUtils.lerp(starOpacity, 0.0, window.act1Factor);
+        } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
+            // ACT2: reduce to ~25% of normal (sparse, eerie)
+            currentStarOpacity = THREE.MathUtils.lerp(starOpacity, starOpacity * 0.25, window.act2Factor);
         }
         starField.material.opacity = currentStarOpacity;
         starField.visible = (currentStarOpacity > 0.0 && params.particles);
