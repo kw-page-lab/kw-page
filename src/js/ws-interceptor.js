@@ -288,10 +288,23 @@
         let textureLoader = null;
         function loadOverrideTexture(imgUrl, callback) {
             if (!imgUrl) return;
+            let resolvedUrl = imgUrl;
+            if (imgUrl.startsWith('/assets/')) {
+                const host = window.location.hostname;
+                if (host !== 'localhost' && host !== '127.0.0.1' && !host.includes('macrostasis.dev')) {
+                    resolvedUrl = 'https://kimeraware.macrostasis.dev' + imgUrl;
+                }
+            }
             if (!textureLoader) {
                 textureLoader = new THREE.TextureLoader();
             }
-            textureLoader.load(imgUrl, (texture) => {
+            const isExternal = resolvedUrl.startsWith('http') && !resolvedUrl.includes(window.location.hostname);
+            if (isExternal) {
+                textureLoader.setCrossOrigin('anonymous');
+            } else {
+                textureLoader.setCrossOrigin(undefined);
+            }
+            textureLoader.load(resolvedUrl, (texture) => {
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.minFilter = THREE.LinearFilter;
                 texture.generateMipmaps = false;
@@ -302,7 +315,7 @@
                     window.overrideTvTexture = texture;
                     window.act2ImageTexture = texture;
                 }
-                console.log('[WebSocket Interceptor] Loaded override image texture:', imgUrl);
+                console.log('[WebSocket Interceptor] Loaded override image texture:', resolvedUrl);
             }, undefined, (err) => {
                 console.error('[WebSocket Interceptor] Failed to load override texture:', err);
             });
