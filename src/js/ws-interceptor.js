@@ -350,6 +350,12 @@
                                         handleResetMessage();
                                     }
                                     
+                                    // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
+                                    if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
+                                        console.log('[WebSocket Interceptor] Blocking apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
+                                        return;
+                                    }
+                                    
                                     if (modified) {
                                         const newEvent = new MessageEvent('message', {
                                             data: JSON.stringify(decrypted),
@@ -408,6 +414,12 @@
                                     handleResetMessage();
                                 }
                                 
+                                // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
+                                if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
+                                    console.log('[WebSocket Interceptor] Blocking onmessage apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
+                                    return;
+                                }
+                                
                                 if (modified) {
                                     const newEvent = new MessageEvent('message', {
                                         data: JSON.stringify(decrypted),
@@ -433,7 +445,7 @@
         });
 
         // Intercept WS messages to trigger Act 1 & Act 2 sequence states in the proxy
-        proxy.addEventListener('message', async (event) => {
+        ws.addEventListener('message', async (event) => {
             try {
                 let data;
                 const rawData = event.data;
