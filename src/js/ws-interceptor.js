@@ -150,6 +150,19 @@
         return _blackTex;
     }
 
+    let _blankTextTex = null;
+    function getBlankTextTex() {
+        if (!_blankTextTex) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 1024;
+            _blankTextTex = new THREE.CanvasTexture(c);
+            _blankTextTex.colorSpace = THREE.SRGBColorSpace;
+            _blankTextTex.minFilter = THREE.LinearFilter;
+            _blankTextTex.generateMipmaps = false;
+        }
+        return _blankTextTex;
+    }
+
     // ── Intercept video element creation for pause/resume tracking ────────────
     const _origCE = document.createElement.bind(document);
     document.createElement = function(tag, opts) {
@@ -180,8 +193,10 @@
                         // Store references to uniforms — we write directly each frame
                         // instead of using getters (getters can be bypassed by THREE.js caching)
                         window._kwMat       = mat;
-                        window._kwOrigTex   = mat.uniforms.uTexture  ? mat.uniforms.uTexture.value  : null;
-                        window._kwOrigIsVid = mat.uniforms.uIsVideo  ? mat.uniforms.uIsVideo.value  : 0;
+                        window._kwOrigTex       = mat.uniforms.uTexture      ? mat.uniforms.uTexture.value      : null;
+                        window._kwOrigTextTex   = mat.uniforms.uTextureText  ? mat.uniforms.uTextureText.value  : null;
+                        window._kwOrigChildVis  = mat.uniforms.uChildVisibility ? mat.uniforms.uChildVisibility.value : 0;
+                        window._kwOrigIsVid     = mat.uniforms.uIsVideo      ? mat.uniforms.uIsVideo.value      : 0;
                     }
 
                     // ── Per-frame ACT2 visual timeline ────────────────────────
@@ -190,6 +205,8 @@
                     // any internal caching in WebGLTextures/WebGLUniforms.
                     const _origUp = tv.update;
                     tv.update = function(time, delta) {
+                        _origUp.call(this, time, delta);
+
                         if (window.audioOnlyActive && window.act2VisualSequenceActive) {
                             const elapsed = window.audioOnlyStartElapsed +
                                 (Date.now() - window.audioOnlyLocalStartTime) / 1000;
@@ -203,8 +220,10 @@
                                 if (ao) ao.volume = 0;
                                 _stopAudioPlayer();
                                 if (m && m.uniforms) {
-                                    if (m.uniforms.uTexture)  m.uniforms.uTexture.value  = window._kwOrigTex;
-                                    if (m.uniforms.uIsVideo)  m.uniforms.uIsVideo.value  = window._kwOrigIsVid;
+                                    if (m.uniforms.uTexture) m.uniforms.uTexture.value = window._kwOrigTex;
+                                    if (m.uniforms.uTextureText) m.uniforms.uTextureText.value = window._kwOrigTextTex;
+                                    if (m.uniforms.uChildVisibility) m.uniforms.uChildVisibility.value = window._kwOrigChildVis;
+                                    if (m.uniforms.uIsVideo) m.uniforms.uIsVideo.value = window._kwOrigIsVid;
                                     m.needsUpdate = true;
                                 }
                                 window.audioOnlyActive          = false;
@@ -237,17 +256,13 @@
                                     tex = updateStaticNoise();
                                 }
 
-                                if (m.uniforms.uTexture && m.uniforms.uTexture.value !== tex) {
-                                    m.uniforms.uTexture.value = tex;
-                                    m.needsUpdate = true;
-                                }
-                                if (m.uniforms.uIsVideo && m.uniforms.uIsVideo.value !== 0) {
-                                    m.uniforms.uIsVideo.value = 0;
-                                    m.needsUpdate = true;
-                                }
+                                if (m.uniforms.uTexture) m.uniforms.uTexture.value = tex;
+                                if (m.uniforms.uTextureText) m.uniforms.uTextureText.value = getBlankTextTex();
+                                if (m.uniforms.uChildVisibility) m.uniforms.uChildVisibility.value = 0;
+                                if (m.uniforms.uIsVideo) m.uniforms.uIsVideo.value = 0;
+                                m.needsUpdate = true;
                             }
                         }
-                        _origUp.call(this, time, delta);
                     };
                     return tv;
                 });
@@ -419,25 +434,25 @@
             if (dec.type === 'trigger_video' || dec.type === 'apply_preset') {
                 if (dec.type === 'apply_preset') window.lastAppliedPreset = dec;
 
-                handleAudioOnly(dec);
-
                 // BLOCK audioOnly trigger_video — TV bundle must NOT enter video mode
                 if (dec.type === 'trigger_video' && (dec.audioOnly === true || dec.audioOnly === 'true')) {
+                    handleAudioOnly(dec);
                     block = true;
                     console.log('[WS Interceptor] Blocked audioOnly trigger_video from TV bundle.');
+                } else if (dec.type === 'trigger_video') {
+                    handleAudioOnly(dec);
                 }
 
-                // BLOCK apply_preset while audioOnly is active (would reset video player / disrupt state)
-                if (dec.type === 'apply_preset' && window.audioOnlyActive) {
-                    block = true;
-                    console.log('[WS Interceptor] Blocked apply_preset (audioOnly active):', dec.presetId);
-                }
+                // Let apply_preset reach the TV bundle. ACT presets must update the TV
+                // state so the CRT material and ACT visuals stay in sync; only the
+                // audioOnly trigger_video is blocked to prevent VideoTexture creation.
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
                 window.audioOnlyActive          = false;
                 window.act2VisualSequenceActive = false;
                 window.overrideTvTexture        = null;
                 window.act2ImageTexture         = null;
+                window.lastAct2ImageUrl         = null;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
             }
