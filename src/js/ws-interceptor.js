@@ -16,6 +16,40 @@
     window.act2ImageTexture         = null;
     window.lastAct2ImageUrl         = null;
 
+    // Pending states to resolve initialization race condition
+    window.pendingAct1State = null;
+    window.pendingAct2State = null;
+
+    let _setAct2Val = null;
+    Object.defineProperty(window, 'setAct2', {
+        get() { return _setAct2Val; },
+        set(fn) {
+            _setAct2Val = fn;
+            if (typeof fn === 'function' && window.pendingAct2State) {
+                const s = window.pendingAct2State;
+                window.pendingAct2State = null;
+                console.log('[WS Interceptor] Executing pending setAct2:', s);
+                fn(s.active, s.elapsedSeconds);
+            }
+        },
+        configurable: true
+    });
+
+    let _setAct1Val = null;
+    Object.defineProperty(window, 'setAct1', {
+        get() { return _setAct1Val; },
+        set(fn) {
+            _setAct1Val = fn;
+            if (typeof fn === 'function' && window.pendingAct1State) {
+                const s = window.pendingAct1State;
+                window.pendingAct1State = null;
+                console.log('[WS Interceptor] Executing pending setAct1:', s);
+                fn(s.active);
+            }
+        },
+        configurable: true
+    });
+
     // Generic ACT pause/resume
     window.actCurrentlyActive = false;
     window.actActiveId        = null;
@@ -261,6 +295,9 @@
         }
         async function decrypt(raw) {
             try {
+                if ((typeof crypto === 'undefined' || !crypto.subtle) && typeof window !== 'undefined' && typeof window.decryptWsMessageFallback === 'function') {
+                    return window.decryptWsMessageFallback(raw);
+                }
                 const b   = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
                 const iv  = b.slice(0,12), tag = b.slice(12,28), ct = b.slice(28);
                 const buf = new Uint8Array(ct.length + 16);
@@ -330,6 +367,12 @@
                 }
 
                 console.log('[WS Interceptor] audioOnly ON — blocking TV bundle, starting audio player. dur:', dur, 'img:', imgUrl);
+
+                // CRITICAL FIX: If act2 preset is already active (e.g. late connection), activate the visual sequence immediately!
+                if (window.lastAppliedPreset && window.lastAppliedPreset.presetId === 'act2') {
+                    activateAct2Visual(imgUrl || window.lastAppliedPreset.mainImageData);
+                }
+
                 // Return false so wrapListener sends the ORIGINAL event — but we BLOCK it in processMsg
                 return false;
             } else {
@@ -488,26 +531,59 @@
                     else if (d.type === 'apply_preset' && window.actCurrentlyActive) onActOff(window.actActiveId);
 
                     if (pid === 'act1' || d.act1 === true) {
-                        if (typeof window.setAct1 === 'function') window.setAct1(true);
-                        if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(true);
+                        } else {
+                            window.pendingAct1State = { active: true };
+                        }
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(false);
+                        } else {
+                            window.pendingAct2State = { active: false };
+                        }
                     } else if (d.type === 'apply_preset' && pid !== 'act1') {
-                        if (typeof window.setAct1 === 'function') window.setAct1(false);
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(false);
+                        } else {
+                            window.pendingAct1State = { active: false };
+                        }
                     }
 
                     if (pid === 'act2' || d.act2 === true) {
-                        if (typeof window.setAct2 === 'function') window.setAct2(true, d.elapsedSeconds || 0);
-                        if (typeof window.setAct1 === 'function') window.setAct1(false);
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(true, d.elapsedSeconds || 0);
+                        } else {
+                            window.pendingAct2State = { active: true, elapsedSeconds: d.elapsedSeconds || 0 };
+                        }
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(false);
+                        } else {
+                            window.pendingAct1State = { active: false };
+                        }
                         // Activate visual sequence if audioOnly is already running
                         if (window.audioOnlyActive && !window.act2VisualSequenceActive) {
                             activateAct2Visual(d.mainImageData || window.lastAct2ImageUrl);
                         }
                     } else if (d.type === 'apply_preset' && pid !== 'act2') {
-                        if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(false);
+                        } else {
+                            window.pendingAct2State = { active: false };
+                        }
                     }
 
                 } else if (d.type === 'reset') {
-                    if (typeof window.setAct1 === 'function') window.setAct1(false);
-                    if (typeof window.setAct2 === 'function') window.setAct2(false);
+                    if (typeof window.setAct1 === 'function') {
+                        window.setAct1(false);
+                    } else {
+                        window.pendingAct1State = { active: false };
+                    }
+                    if (typeof window.setAct2 === 'function') {
+                        window.setAct2(false);
+                    } else {
+                        window.pendingAct2State = { active: false };
+                    }
+                    window.lastAppliedPreset = null;
                     if (window.actCurrentlyActive) onActOff(window.actActiveId);
                 }
             } catch(e) { /* ignore */ }
