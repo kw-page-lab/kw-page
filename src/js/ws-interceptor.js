@@ -143,40 +143,17 @@
                     const mat = tv && tv.crtScreen && tv.crtScreen.material;
                     if (mat && mat.uniforms) {
 
-                        // ── uTexture: return overrideTvTexture when ACT2 visual is active
-                        const uTex = mat.uniforms.uTexture;
-                        if (uTex) {
-                            let _tv = uTex.value;
-                            Object.defineProperty(uTex, 'value', {
-                                get() {
-                                    // Only override during ACT2 visual sequence
-                                    if (window.act2VisualSequenceActive && window.overrideTvTexture) {
-                                        return window.overrideTvTexture;
-                                    }
-                                    return _tv;
-                                },
-                                set(v) { _tv = v; },
-                                configurable: true
-                            });
-                        }
-
-                        // ── uIsVideo: force 0 during ACT2 visual sequence so shader
-                        // treats overrideTvTexture as a static image (not video)
-                        const uIsVid = mat.uniforms.uIsVideo;
-                        if (uIsVid) {
-                            let _iv = uIsVid.value;
-                            Object.defineProperty(uIsVid, 'value', {
-                                get() {
-                                    if (window.act2VisualSequenceActive) return 0;
-                                    return _iv;
-                                },
-                                set(v) { _iv = v; },
-                                configurable: true
-                            });
-                        }
+                        // Store references to uniforms — we write directly each frame
+                        // instead of using getters (getters can be bypassed by THREE.js caching)
+                        window._kwMat       = mat;
+                        window._kwOrigTex   = mat.uniforms.uTexture  ? mat.uniforms.uTexture.value  : null;
+                        window._kwOrigIsVid = mat.uniforms.uIsVideo  ? mat.uniforms.uIsVideo.value  : 0;
                     }
 
                     // ── Per-frame ACT2 visual timeline ────────────────────────
+                    // We write DIRECTLY to mat.uniforms each frame — no getters.
+                    // This guarantees THREE.js always uses our texture, bypassing
+                    // any internal caching in WebGLTextures/WebGLUniforms.
                     const _origUp = tv.update;
                     tv.update = function(time, delta) {
                         if (window.audioOnlyActive && window.act2VisualSequenceActive) {
@@ -184,37 +161,56 @@
                                 (Date.now() - window.audioOnlyLocalStartTime) / 1000;
                             const dur = window.audioOnlyDuration || 60;
                             const tgt = (window.tvOverrideVolume != null ? window.tvOverrideVolume : 90) / 100;
-
-                            const ao = window._aoPlayerElement; // our separate audio element
+                            const ao  = window._aoPlayerElement;
+                            const m   = window._kwMat;
 
                             if (elapsed >= dur) {
-                                // Sequence complete — clean up
+                                // ── Sequence done: restore original uniforms ──
                                 if (ao) ao.volume = 0;
                                 _stopAudioPlayer();
+                                if (m && m.uniforms) {
+                                    if (m.uniforms.uTexture)  m.uniforms.uTexture.value  = window._kwOrigTex;
+                                    if (m.uniforms.uIsVideo)  m.uniforms.uIsVideo.value  = window._kwOrigIsVid;
+                                    m.needsUpdate = true;
+                                }
                                 window.audioOnlyActive          = false;
                                 window.act2VisualSequenceActive = false;
                                 window.overrideTvTexture        = null;
-                                console.log('[WS Interceptor] ACT2 sequence complete.');
-                            } else if (elapsed < 11.0) {
-                                // 0-11s: silence + black (TV powered off, grass growing)
-                                if (ao) ao.volume = 0;
-                                window.overrideTvTexture = getBlackTex();
-                            } else if (elapsed < 13.0) {
-                                // 11-13s: audio fades in
-                                if (ao) ao.volume = ((elapsed - 11.0) / 2.0) * tgt;
-                                window.overrideTvTexture = window.act2ImageTexture || getBlackTex();
-                            } else if (elapsed < 50.0) {
-                                // 13-50s: full audio + image
-                                if (ao) ao.volume = tgt;
-                                window.overrideTvTexture = window.act2ImageTexture || getBlackTex();
-                            } else if (elapsed < 55.0) {
-                                // 50-55s: audio fades out
-                                if (ao) ao.volume = Math.max(0, ((55.0 - elapsed) / 5.0) * tgt);
-                                window.overrideTvTexture = window.act2ImageTexture || getBlackTex();
-                            } else {
-                                // 55-60s: silence + static noise
-                                if (ao) ao.volume = 0;
-                                window.overrideTvTexture = updateStaticNoise();
+                                console.log('[WS Interceptor] ACT2 sequence complete — uniforms restored.');
+
+                            } else if (m && m.uniforms) {
+                                // ── Active: write override texture directly ───
+                                let tex;
+                                if (elapsed < 11.0) {
+                                    // 0-11s: black
+                                    if (ao) ao.volume = 0;
+                                    tex = getBlackTex();
+                                } else if (elapsed < 13.0) {
+                                    // 11-13s: image fades in with audio
+                                    if (ao) ao.volume = ((elapsed - 11.0) / 2.0) * tgt;
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else if (elapsed < 50.0) {
+                                    // 13-50s: full audio + image
+                                    if (ao) ao.volume = tgt;
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else if (elapsed < 55.0) {
+                                    // 50-55s: audio fades out
+                                    if (ao) ao.volume = Math.max(0, ((55.0 - elapsed) / 5.0) * tgt);
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else {
+                                    // 55-60s: static noise
+                                    if (ao) ao.volume = 0;
+                                    tex = updateStaticNoise();
+                                }
+
+                                if (m.uniforms.uTexture && m.uniforms.uTexture.value !== tex) {
+                                    m.uniforms.uTexture.value = tex;
+                                    m.needsUpdate = true;
+                                }
+                                if (m.uniforms.uIsVideo && m.uniforms.uIsVideo.value !== 0) {
+                                    m.uniforms.uIsVideo.value = 0;
+                                    m.needsUpdate = true;
+                                }
                             }
                         }
                         _origUp.call(this, time, delta);
