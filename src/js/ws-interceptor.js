@@ -90,8 +90,13 @@
                             if (uTextureUniform) {
                                 let originalTextureVal = uTextureUniform.value;
                                 Object.defineProperty(uTextureUniform, 'value', {
-                                    get() {
-                                        // Only hijack if there is an explicit override texture set
+                                get() {
+                                        // audioOnly active: block video texture completely.
+                                        // Show overrideTvTexture (ACT2 image/static/black) or black.
+                                        if (window.audioOnlyActive) {
+                                            return window.overrideTvTexture || getBlackTexture();
+                                        }
+                                        // Explicit override (e.g. black handoff after sequence ends)
                                         if (window.overrideTvTexture) {
                                             return window.overrideTvTexture;
                                         }
