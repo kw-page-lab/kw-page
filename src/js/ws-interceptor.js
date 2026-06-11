@@ -16,6 +16,12 @@
     window.act2ImageTexture         = null;
     window.lastAct2ImageUrl         = null;
 
+    // YouTube Shorts portrait pillarbox
+    // uScaleX > 1 = pillarboxed (content narrower than full screen)
+    // For 9:16 Short on ~1.14:1 CRT screen → uScaleX ≈ 2.0 → content fills ~50% screen width, centered
+    window.shortVideoActive = false;
+    window.shortScaleX      = 2.0;
+
     // Pending states to resolve initialization race condition
     window.pendingAct1State = null;
     window.pendingAct2State = null;
@@ -347,6 +353,37 @@
                             _act2UniformsLocked = false;
                             console.log('[WS Interceptor] ACT2: uniforms unlocked (safety cleanup).');
                         }
+
+                        // ── Short video portrait pillarbox ─────────────────────────────────
+                        // If a YouTube Short (9:16) is active and we're NOT in an ACT2 sequence,
+                        // apply uScaleX > 1 so the video appears in a centered portrait column.
+                        // The TV bundle does NOT touch uScaleX in video mode, so one write per
+                        // frame is enough to maintain it.
+                        if (window.shortVideoActive &&
+                            !window.act2VisualSequenceActive &&
+                            !window.audioOnlyActive) {
+                            const m = window._kwMat;
+                            if (m && m.uniforms) {
+                                if (m.uniforms.uScaleX && !m.uniforms.uScaleX.__kwLocked)
+                                    m.uniforms.uScaleX.value = window.shortScaleX;
+                                if (m.uniforms.uScaleY && !m.uniforms.uScaleY.__kwLocked)
+                                    m.uniforms.uScaleY.value = 1;
+                                m.needsUpdate = true;
+                            }
+                        } else if (!window.shortVideoActive &&
+                                   !window.act2VisualSequenceActive &&
+                                   !window.audioOnlyActive &&
+                                   !_act2UniformsLocked) {
+                            // Normal mode: ensure scale is 1 if it was left at Short scale
+                            const m = window._kwMat;
+                            if (m && m.uniforms && m.uniforms.uScaleX &&
+                                !m.uniforms.uScaleX.__kwLocked &&
+                                m.uniforms.uScaleX.value === window.shortScaleX) {
+                                m.uniforms.uScaleX.value = 1;
+                                m.uniforms.uScaleY.value = 1;
+                                m.needsUpdate = true;
+                            }
+                        }
                     };
                     return tv;
                 });
@@ -525,6 +562,13 @@
                     console.log('[WS Interceptor] Blocked audioOnly trigger_video from TV bundle.');
                 } else if (dec.type === 'trigger_video') {
                     handleAudioOnly(dec);
+                    // Detect YouTube Short → activate portrait pillarbox
+                    const newIsShort = dec.isShort === true || dec.isShort === 'true' ||
+                        !!(dec.videoUrl && dec.videoUrl.match(/\/shorts\/[a-zA-Z0-9_-]{11}/));
+                    if (newIsShort !== window.shortVideoActive) {
+                        window.shortVideoActive = newIsShort;
+                        console.log(`[WS Interceptor] Short portrait mode: ${newIsShort ? 'ON (uScaleX=' + window.shortScaleX + ')' : 'OFF'}`);
+                    }
                 }
 
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
@@ -539,6 +583,7 @@
                 window.lastAct2ImageUrl         = null;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
+                window.shortVideoActive         = false; // clear Short portrait mode on reset
             }
             return { block, modified };
         }
