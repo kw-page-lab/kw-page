@@ -125,12 +125,13 @@
     function updateStaticNoise() {
         if (!_sCanvas) {
             _sCanvas = document.createElement('canvas');
-            _sCanvas.width = _sCanvas.height = 256;
+            _sCanvas.width = _sCanvas.height = 512;
+            _sCanvas.height = 512;
             _sCtx = _sCanvas.getContext('2d');
             _sTex = new THREE.CanvasTexture(_sCanvas);
             _sTex.minFilter = _sTex.magFilter = THREE.NearestFilter;
         }
-        const id = _sCtx.createImageData(256, 256);
+        const id = _sCtx.createImageData(512, 512);
         for (let i = 0; i < id.data.length; i += 4) {
             const v = Math.random() * 255 | 0;
             id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
@@ -138,6 +139,66 @@
         _sCtx.putImageData(id, 0, 0);
         _sTex.needsUpdate = true;
         return _sTex;
+    }
+
+    // ── Uniform lock helpers ──────────────────────────────────────────────────
+    // The TV bundle's Lt() runs AFTER tv.update(), so it overwrites our uniforms.
+    // We lock specific uniforms so no external code can change them during ACT2.
+    let _lockedUniforms = {};
+    function lockUniform(uniforms, key, lockedValue) {
+        if (!uniforms || !(key in uniforms)) return;
+        const u = uniforms[key];
+        if (u.__kwLocked) return; // already locked
+        const original = Object.getOwnPropertyDescriptor(u, 'value');
+        u.__kwLocked = true;
+        u.__kwOrigDesc = original;
+        Object.defineProperty(u, 'value', {
+            get() { return lockedValue; },
+            set(_v) { /* blocked during ACT2 */ },
+            configurable: true,
+            enumerable: true
+        });
+        _lockedUniforms[key] = { u, lockedValue };
+    }
+    function setLockedUniformValue(key, newValue) {
+        if (_lockedUniforms[key]) {
+            _lockedUniforms[key].lockedValue = newValue;
+            const u = _lockedUniforms[key].u;
+            // Re-define with new locked value
+            Object.defineProperty(u, 'value', {
+                get() { return newValue; },
+                set(_v) { /* blocked during ACT2 */ },
+                configurable: true,
+                enumerable: true
+            });
+        }
+    }
+    function unlockUniform(uniforms, key) {
+        if (!uniforms || !(key in uniforms)) return;
+        const u = uniforms[key];
+        if (!u.__kwLocked) return;
+        const origDesc = u.__kwOrigDesc;
+        if (origDesc) {
+            Object.defineProperty(u, 'value', origDesc);
+        } else {
+            Object.defineProperty(u, 'value', { value: 1, writable: true, configurable: true, enumerable: true });
+        }
+        u.__kwLocked = false;
+        delete u.__kwOrigDesc;
+        delete _lockedUniforms[key];
+    }
+    function lockAct2Uniforms(m, tex) {
+        if (!m || !m.uniforms) return;
+        lockUniform(m.uniforms, 'uScaleX', 1);
+        lockUniform(m.uniforms, 'uScaleY', 1);
+        lockUniform(m.uniforms, 'uIsVideo', 0);
+        lockUniform(m.uniforms, 'uChildVisibility', 0);
+        lockUniform(m.uniforms, 'uTexture', tex);
+        lockUniform(m.uniforms, 'uTextureText', null);
+    }
+    function unlockAct2Uniforms(m) {
+        if (!m || !m.uniforms) return;
+        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText'].forEach(k => unlockUniform(m.uniforms, k));
     }
 
     let _blackTex = null;
@@ -200,13 +261,18 @@
                     }
 
                     // ── Per-frame ACT2 visual timeline ────────────────────────
-                    // We write DIRECTLY to mat.uniforms each frame — no getters.
-                    // This guarantees THREE.js always uses our texture, bypassing
-                    // any internal caching in WebGLTextures/WebGLUniforms.
+                    // Strategy: run AFTER the TV bundle's Lt() so we always win.
+                    // We wrap tv.update so our code runs LAST, after the bundle
+                    // has already called Lt() internally.
+                    // For scale: we LOCK the uScaleX/uScaleY uniforms so even if
+                    // Lt() runs after us, its write is silently swallowed.
+                    let _act2UniformsLocked = false;
                     const _origUp = tv.update;
                     tv.update = function(time, delta) {
+                        // Run the original update (which calls Lt() internally)
                         _origUp.call(this, time, delta);
 
+                        // Now override AFTER Lt() has run — we always win
                         if (window.audioOnlyActive && window.act2VisualSequenceActive) {
                             const elapsed = window.audioOnlyStartElapsed +
                                 (Date.now() - window.audioOnlyLocalStartTime) / 1000;
@@ -216,13 +282,19 @@
                             const m   = window._kwMat;
 
                             if (elapsed >= dur) {
-                                // ── Sequence done: restore original uniforms ──
+                                // ── Sequence done: unlock + restore original uniforms ──
                                 if (ao) ao.volume = 0;
                                 _stopAudioPlayer();
+                                if (_act2UniformsLocked) {
+                                    unlockAct2Uniforms(m);
+                                    _act2UniformsLocked = false;
+                                }
                                 if (m && m.uniforms) {
                                     if (m.uniforms.uTexture) m.uniforms.uTexture.value = window._kwOrigTex;
                                     if (m.uniforms.uTextureText) m.uniforms.uTextureText.value = window._kwOrigTextTex;
                                     if (m.uniforms.uChildVisibility) m.uniforms.uChildVisibility.value = window._kwOrigChildVis;
+                                    if (m.uniforms.uScaleX) m.uniforms.uScaleX.value = 1;
+                                    if (m.uniforms.uScaleY) m.uniforms.uScaleY.value = 1;
                                     if (m.uniforms.uIsVideo) m.uniforms.uIsVideo.value = window._kwOrigIsVid;
                                     m.needsUpdate = true;
                                 }
@@ -232,7 +304,7 @@
                                 console.log('[WS Interceptor] ACT2 sequence complete — uniforms restored.');
 
                             } else if (m && m.uniforms) {
-                                // ── Active: write override texture directly ───
+                                // ── Active: determine texture for this frame ──
                                 let tex;
                                 if (elapsed < 11.0) {
                                     // 0-11s: black
@@ -251,17 +323,29 @@
                                     if (ao) ao.volume = Math.max(0, ((55.0 - elapsed) / 5.0) * tgt);
                                     tex = window.act2ImageTexture || getBlackTex();
                                 } else {
-                                    // 55-60s: static noise
+                                    // 55-60s: static noise (full screen)
                                     if (ao) ao.volume = 0;
                                     tex = updateStaticNoise();
                                 }
 
-                                if (m.uniforms.uTexture) m.uniforms.uTexture.value = tex;
-                                if (m.uniforms.uTextureText) m.uniforms.uTextureText.value = getBlankTextTex();
-                                if (m.uniforms.uChildVisibility) m.uniforms.uChildVisibility.value = 0;
-                                if (m.uniforms.uIsVideo) m.uniforms.uIsVideo.value = 0;
+                                // Lock uniforms on first active frame (prevents Lt() overwrite)
+                                if (!_act2UniformsLocked) {
+                                    lockAct2Uniforms(m, tex);
+                                    _act2UniformsLocked = true;
+                                    console.log('[WS Interceptor] ACT2: uniforms locked (prevents Lt() scale override).');
+                                } else {
+                                    // Update locked values each frame
+                                    setLockedUniformValue('uTexture', tex);
+                                    setLockedUniformValue('uTextureText', getBlankTextTex());
+                                }
                                 m.needsUpdate = true;
                             }
+                        } else if (_act2UniformsLocked) {
+                            // Safety: if sequence stopped unexpectedly, unlock
+                            const m = window._kwMat;
+                            unlockAct2Uniforms(m);
+                            _act2UniformsLocked = false;
+                            console.log('[WS Interceptor] ACT2: uniforms unlocked (safety cleanup).');
                         }
                     };
                     return tv;
@@ -461,28 +545,50 @@
 
         // ── Generic ACT pause/resume ──────────────────────────────────────────
         function onActOn(id) {
-            if (window.actCurrentlyActive) return;
+            // Allow re-entry if it's a different ACT (unlikely but safe)
+            if (window.actCurrentlyActive && window.actActiveId === id) return;
             window.actCurrentlyActive = true; window.actActiveId = id;
             const v = window.tvVideoElement;
-            if (v && v.src && !v.paused) {
-                const live = !isFinite(v.duration) || v.duration === Infinity;
-                window.actPausedVideoInfo = { url: v.src, t: v.currentTime, live, at: Date.now(), vol: v.volume };
-                console.log(`[WS Interceptor] ACT${id}: paused video at ${v.currentTime.toFixed(1)}s`);
+            // Capture video state: track even if paused (auto-play may have been blocked)
+            if (v && v.src) {
+                const live = !isFinite(v.duration) || v.duration === Infinity || v.duration === 0;
+                const ct = (v.readyState >= 1 && isFinite(v.currentTime)) ? v.currentTime : 0;
+                window.actPausedVideoInfo = { url: v.src, t: ct, live, at: Date.now(), vol: v.volume };
+                if (!v.paused) {
+                    try { v.pause(); } catch(e) {}
+                    console.log(`[WS Interceptor] ACT${id}: paused video at ${ct.toFixed(1)}s (live=${live})`);
+                } else {
+                    console.log(`[WS Interceptor] ACT${id}: video already paused at ${ct.toFixed(1)}s (saved state)`);
+                }
             }
         }
         function onActOff(id) {
-            if (!window.actCurrentlyActive || window.actActiveId !== id) return;
+            // Accept any id if actCurrentlyActive — handles stale id mismatches
+            if (!window.actCurrentlyActive) return;
             window.actCurrentlyActive = false; window.actActiveId = null;
             const i = window.actPausedVideoInfo; window.actPausedVideoInfo = null;
             if (!i) return;
             const v = window.tvVideoElement; if (!v) return;
-            v.volume = i.vol;
-            if (i.live) { if (v.paused) v.play().catch(()=>{}); }
-            else {
-                const dt = (Date.now() - i.at) / 1000;
-                v.currentTime = Math.min(isFinite(v.duration) ? v.duration - 0.5 : Infinity, i.t + dt);
+            // Restore volume
+            try { v.volume = i.vol; } catch(e) {}
+            if (i.live) {
+                // Live: sync to live edge
+                try {
+                    if (v.seekable && v.seekable.length > 0) {
+                        const edge = v.seekable.end(v.seekable.length - 1);
+                        if (isFinite(edge) && edge > 0) v.currentTime = Math.max(0, edge - 1.5);
+                    }
+                } catch(e) {}
                 if (v.paused) v.play().catch(()=>{});
-                console.log(`[WS Interceptor] ACT${id}: resumed at ${v.currentTime.toFixed(1)}s`);
+                console.log(`[WS Interceptor] ACT${id}: live stream resynced to live edge.`);
+            } else {
+                // VOD: resume at exact captured timestamp
+                try {
+                    const resumeAt = Math.min(isFinite(v.duration) && v.duration > 0 ? v.duration - 0.5 : Infinity, i.t);
+                    v.currentTime = resumeAt;
+                } catch(e) {}
+                if (v.paused) v.play().catch(()=>{});
+                console.log(`[WS Interceptor] ACT${id}: VOD resumed at ${i.t.toFixed(1)}s.`);
             }
         }
 
