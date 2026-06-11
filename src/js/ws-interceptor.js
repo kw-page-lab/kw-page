@@ -26,8 +26,21 @@
     let _aoHls   = null;
     let _aoVideo = null;
 
+    function _resolveAssetUrl(url) {
+        if (!url) return url;
+        // Assets live on kimeraware.macrostasis.dev, not on GitHub Pages (kimeraware.com)
+        if (url.startsWith('/assets/') || url.startsWith('/hls-')) {
+            const h = location.hostname;
+            if (h !== 'localhost' && !h.includes('127.0.0.1') && !h.includes('macrostasis.dev')) {
+                return 'https://kimeraware.macrostasis.dev' + url;
+            }
+        }
+        return url;
+    }
+
     function _startAudioPlayer(videoUrl, volPct, startElapsed) {
         _stopAudioPlayer();
+        const resolvedUrl = _resolveAssetUrl(videoUrl);
         const vid = document.createElement('audio'); // audio element, not video
         vid.crossOrigin = 'anonymous';
         vid.volume = Math.max(0, Math.min(1, (volPct != null ? volPct : 90) / 100));
@@ -47,20 +60,21 @@
             });
         };
 
-        if (videoUrl && videoUrl.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+        if (resolvedUrl && resolvedUrl.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
             _aoHls = new Hls({ enableWorker: false, debug: false });
-            _aoHls.loadSource(videoUrl);
+            _aoHls.loadSource(resolvedUrl);
             _aoHls.attachMedia(vid);
             _aoHls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
             _aoHls.on(Hls.Events.ERROR, (e, d) => {
                 if (d.fatal) console.error('[AudioOnly HLS]', d.type, d.details);
             });
-        } else if (videoUrl) {
-            vid.src = videoUrl;
+        } else if (resolvedUrl) {
+            vid.src = resolvedUrl;
             vid.addEventListener('canplay', tryPlay, { once: true });
             vid.load();
         }
-        console.log('[AudioOnly] Audio player started:', videoUrl, 'vol:', volPct + '%');
+        console.log('[AudioOnly] Audio player started:', resolvedUrl, '(original:', videoUrl + ')', 'vol:', volPct + '%');
+
     }
 
     function _stopAudioPlayer() {
