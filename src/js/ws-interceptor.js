@@ -1,39 +1,43 @@
-// WebSocket Interceptor to track connection state
+// WebSocket Interceptor — KimeraWare
+// Handles: audioOnly mode, ACT pause/resume, uTexture override for special sequences
 (function() {
     window.wsConnected = false;
     window.wsProgress = 0;
+
+    // ── audioOnly mode state ─────────────────────────────────────────────────
+    // When audioOnly is active, the TV screen shows whatever the current
+    // preset renders (images, default mode, etc.) while the video plays silently.
+    // overrideTvTexture is ONLY set by ACT sequences that need a specific visual.
     window.overrideTvTexture = null;
-    window.audioOnlyOverrideUntil = null;
-    window.tvOverrideVolume = null;
-    window.act2ImageTexture = null;
-    window.tvVideoElement = null;
     window.audioOnlyActive = false;
     window.audioOnlyDuration = 60;
-    window.tvOriginalIsVideoVal = 0;
+    window.audioOnlyStartElapsed = 0;
+    window.audioOnlyLocalStartTime = 0;
+    window.audioOnlyOverrideUntil = null;
+    window.tvOverrideVolume = null;
+    window.tvVideoElement = null;
 
-    // Static noise texture generator to display clean static at the end
-    let staticCanvas = null;
-    let staticCtx = null;
-    let staticTexture = null;
+    // ── ACT pause/resume state ──────────────────────────────────────────────
+    // Generic system: any ACT (1, 2, N) can pause the active video and resume it.
+    window.actPausedVideoInfo = null; // { url, currentTime, isLive, startTime, duration }
+    window.actCurrentlyActive = false; // true if any ACT is running
 
+    // Static noise texture (reused across frames)
+    let staticCanvas = null, staticCtx = null, staticTexture = null;
     function updateStaticNoise() {
         if (!staticCanvas) {
             staticCanvas = document.createElement('canvas');
-            staticCanvas.width = 256;
-            staticCanvas.height = 256;
+            staticCanvas.width = 256; staticCanvas.height = 256;
             staticCtx = staticCanvas.getContext('2d');
             staticTexture = new THREE.CanvasTexture(staticCanvas);
             staticTexture.minFilter = THREE.NearestFilter;
             staticTexture.magFilter = THREE.NearestFilter;
         }
-        let imgData = staticCtx.createImageData(256, 256);
-        let data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            let val = Math.floor(Math.random() * 255);
-            data[i] = val;
-            data[i+1] = val;
-            data[i+2] = val;
-            data[i+3] = 255;
+        const imgData = staticCtx.createImageData(256, 256);
+        const d = imgData.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const v = Math.floor(Math.random() * 255);
+            d[i] = v; d[i+1] = v; d[i+2] = v; d[i+3] = 255;
         }
         staticCtx.putImageData(imgData, 0, 0);
         staticTexture.needsUpdate = true;
@@ -42,155 +46,129 @@
     let blackTexture = null;
     function getBlackTexture() {
         if (!blackTexture) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1;
-            canvas.height = 1;
-            const ctx = canvas.getContext('2d');
+            const c = document.createElement('canvas');
+            c.width = 1; c.height = 1;
+            const ctx = c.getContext('2d');
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, 1, 1);
-            blackTexture = new THREE.CanvasTexture(canvas);
+            blackTexture = new THREE.CanvasTexture(c);
         }
         return blackTexture;
     }
 
-
-    // Intercept video element creation to get direct access to its volume and progress
+    // ── Intercept video element creation ───────────────────────────────────
     const originalCreateElement = document.createElement;
     document.createElement = function(tagName, options) {
         const el = originalCreateElement.call(document, tagName, options);
         if (tagName && tagName.toLowerCase() === 'video') {
             window.tvVideoElement = el;
-            console.log('[WebSocket Interceptor] Intercepted TV video element creation');
+            console.log('[WS Interceptor] Captured TV video element');
         }
         return el;
     };
-    
-    // Auto-wrap KimerawareTV to intercept crtScreen texture in update loop
+
+    // ── Wrap KimerawareTV.loadTV ────────────────────────────────────────────
     let _kimerawareTV = undefined;
     Object.defineProperty(window, 'KimerawareTV', {
-        get() {
-            return _kimerawareTV;
-        },
+        get() { return _kimerawareTV; },
         set(val) {
             _kimerawareTV = val;
             if (val && val.loadTV && !val.loadTV.isWrapped) {
-                console.log('[WebSocket Interceptor] Wrapping KimerawareTV.loadTV for texture override support');
+                console.log('[WS Interceptor] Wrapping KimerawareTV.loadTV');
                 const originalLoadTV = val.loadTV;
                 val.loadTV = function() {
                     return originalLoadTV.apply(this, arguments).then(tv => {
                         const material = tv.crtScreen.material;
                         if (material && material.uniforms) {
-                            // Hijack uTexture via getter/setter to guarantee ZERO-leak video frames
+
+                            // ── uTexture override ──────────────────────────
+                            // ONLY override when:
+                            // 1. audioOnly is active AND overrideTvTexture is set (ACT2 uses it)
+                            // 2. overrideTvTexture is explicitly set (static noise, black handoff)
+                            // Normal videos (audioOnly=false): overrideTvTexture is null → pass-through
                             const uTextureUniform = material.uniforms.uTexture;
                             if (uTextureUniform) {
                                 let originalTextureVal = uTextureUniform.value;
                                 Object.defineProperty(uTextureUniform, 'value', {
                                     get() {
-                                        // Block the raw video texture from leaking through in these cases:
-                                        // 1. While audioOnly override is active
-                                        // 2. Even AFTER audioOnly deactivates, if the TV shader still thinks
-                                        //    it's in video mode (uIsVideo===1). This prevents the 1-frame
-                                        //    flash that occurs in the same RAF tick audioOnlyActive goes false.
-                                        // 3. If overrideTvTexture is still set (black handoff state): the
-                                        //    sequence just ended but the server's black_screen preset hasn't
-                                        //    arrived yet — keep showing black until that message clears it.
-                                        if (window.audioOnlyActive || window.tvOriginalIsVideoVal === 1 || window.overrideTvTexture) {
-                                            return window.overrideTvTexture || getBlackTexture();
+                                        // Only hijack if there is an explicit override texture set
+                                        if (window.overrideTvTexture) {
+                                            return window.overrideTvTexture;
                                         }
                                         return originalTextureVal;
                                     },
-                                    set(val) {
-                                        originalTextureVal = val;
-                                    },
+                                    set(val) { originalTextureVal = val; },
                                     configurable: true
                                 });
                             }
 
-                            // Hijack uIsVideo to always report 0 when audioOnly is active
+                            // ── uIsVideo override ──────────────────────────
+                            // When audioOnly is active, tell the shader there is no video
+                            // so it won't try to render the video texture (which is muted/invisible)
                             const uIsVideoUniform = material.uniforms.uIsVideo;
                             if (uIsVideoUniform) {
-                                let originalIsVideoVal = uIsVideoUniform.value;
+                                let origIsVideoVal = uIsVideoUniform.value;
                                 Object.defineProperty(uIsVideoUniform, 'value', {
                                     get() {
-                                        if (window.audioOnlyActive) {
-                                            return 0;
-                                        }
-                                        return originalIsVideoVal;
+                                        if (window.audioOnlyActive) return 0;
+                                        return origIsVideoVal;
                                     },
-                                    set(val) {
-                                        originalIsVideoVal = val;
-                                        window.tvOriginalIsVideoVal = val;
-                                    },
+                                    set(val) { origIsVideoVal = val; },
                                     configurable: true
                                 });
                             }
                         }
 
+                        // ── ACT2-specific update hook ──────────────────────
+                        // This manages the visual timeline for ACT2 audio-only sequence.
+                        // ACT2 uses overrideTvTexture to control what the screen shows.
+                        // Other ACTs (or plain audioOnly) do NOT set overrideTvTexture,
+                        // so the normal preset visuals show through.
                         const originalUpdate = tv.update;
                         tv.update = function(time, delta) {
-                            // Custom ACT2 sequence control on client side:
-                            if (window.audioOnlyActive) {
-                                const elapsed = (window.audioOnlyStartElapsed !== undefined ? window.audioOnlyStartElapsed : 0) + 
-                                                (Date.now() - (window.audioOnlyLocalStartTime || Date.now())) / 1000;
+                            if (window.audioOnlyActive && window.act2VisualSequenceActive) {
+                                // ACT2 manages its own visual sequence via overrideTvTexture
+                                const elapsed = window.audioOnlyStartElapsed +
+                                    (Date.now() - window.audioOnlyLocalStartTime) / 1000;
                                 const duration = window.audioOnlyDuration || 60;
 
                                 if (elapsed >= duration) {
-                                    // Only deactivate when the TV shader has EXPLICITLY confirmed it left
-                                    // video mode (uIsVideo === 0). Not "!== 1" — we want the exact value.
-                                    if (window.tvOriginalIsVideoVal === 0) {
-                                        // CRITICAL: set overrideTvTexture to BLACK *before* flipping
-                                        // audioOnlyActive to false. The uTexture getter checks
-                                        // audioOnlyActive on every RAF frame; if we null the override
-                                        // in the same tick we deactivate, there is a 1-frame window
-                                        // where audioOnlyActive===false but the video element is still
-                                        // loaded, allowing a raw video frame to bleed through.
-                                        // Keeping black here is safe: the server will send
-                                        // apply_preset:black_screen within milliseconds anyway.
-                                        window.overrideTvTexture = getBlackTexture();
-                                        window.audioOnlyActive = false;
-                                        console.log('[WebSocket Interceptor] Audio-only sequence completed; uIsVideo confirmed 0. Holding black texture for handoff to black_screen preset.');
-                                    } else {
-                                        // Still in video mode → keep static noise on screen
-                                        updateStaticNoise();
-                                        window.overrideTvTexture = staticTexture;
+                                    // Sequence done — hold black until server sends black_screen preset
+                                    window.overrideTvTexture = getBlackTexture();
+                                    window.audioOnlyActive = false;
+                                    window.act2VisualSequenceActive = false;
+                                    console.log('[WS Interceptor] ACT2 audio-only sequence ended. Holding black for preset handoff.');
+                                } else if (elapsed < 11.0) {
+                                    // 0-11s: silence, black screen (TV powered off + grass grow)
+                                    if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
+                                    window.overrideTvTexture = getBlackTexture();
+                                } else if (elapsed < 50.0) {
+                                    // 11-50s: show act2 image, fade audio in (11-13s)
+                                    const targetVol = window.tvOverrideVolume != null
+                                        ? window.tvOverrideVolume / 100 : 0.9;
+                                    if (window.tvVideoElement) {
+                                        if (elapsed < 13.0) {
+                                            window.tvVideoElement.volume = ((elapsed - 11.0) / 2.0) * targetVol;
+                                        } else {
+                                            window.tvVideoElement.volume = targetVol;
+                                        }
                                     }
+                                    window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
+                                } else if (elapsed < 55.0) {
+                                    // 50-55s: fade audio out
+                                    const targetVol = window.tvOverrideVolume != null
+                                        ? window.tvOverrideVolume / 100 : 0.9;
+                                    if (window.tvVideoElement) {
+                                        window.tvVideoElement.volume = Math.max(0, ((55.0 - elapsed) / 5.0) * targetVol);
+                                    }
+                                    window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
                                 } else {
-                                    // 1. First 11 seconds (poweroff 5s + grass grow 6s): silence, show black background
-                                    if (elapsed < 11.0) {
-                                        if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
-                                        window.overrideTvTexture = getBlackTexture();
-                                    } 
-                                    // 2. Second 11 to 50: show image, volume fades in from 11.0 to 13.0s (over 2 seconds)
-                                    else if (elapsed >= 11.0 && elapsed < 50.0) {
-                                        const targetVolume = (window.tvOverrideVolume !== null) ? window.tvOverrideVolume / 100 : 0.9;
-                                        if (window.tvVideoElement) {
-                                            if (elapsed < 13.0) {
-                                                const t = (elapsed - 11.0) / 2.0;
-                                                window.tvVideoElement.volume = t * targetVolume;
-                                            } else {
-                                                window.tvVideoElement.volume = targetVolume;
-                                            }
-                                        }
-                                        window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
-                                    } 
-                                    // 3. Second 50 to 55: volume fades out over 5 seconds (50.0 to 55.0s)
-                                    else if (elapsed >= 50.0 && elapsed < 55.0) {
-                                        const targetVolume = (window.tvOverrideVolume !== null) ? window.tvOverrideVolume / 100 : 0.9;
-                                        if (window.tvVideoElement) {
-                                            const t = (55.0 - elapsed) / 5.0; // 1.0 down to 0.0
-                                            window.tvVideoElement.volume = Math.max(0.0, t * targetVolume);
-                                        }
-                                        window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
-                                    } 
-                                    // 4. Second 55 to 60: silence, image disappears, show static (no text)
-                                    else {
-                                        if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
-                                        updateStaticNoise();
-                                        window.overrideTvTexture = staticTexture;
-                                    }
+                                    // 55-60s: silence, static noise
+                                    if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
+                                    updateStaticNoise();
+                                    window.overrideTvTexture = staticTexture;
                                 }
                             }
-                            
                             originalUpdate.call(this, time, delta);
                         };
                         return tv;
@@ -202,6 +180,7 @@
         configurable: true
     });
 
+    // ── WebSocket interception ───────────────────────────────────────────────
     const OriginalWebSocket = window.WebSocket;
     window.WebSocket = function(url, protocols) {
         let modifiedUrl = url;
@@ -211,83 +190,61 @@
                 id = 'client_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
                 localStorage.setItem('kimeraware_client_id', id);
             }
-            
             let tempUrl = url;
-            let isWs = false;
-            let isWss = false;
-            if (url.startsWith('ws://')) {
-                tempUrl = url.replace('ws://', 'http://');
-                isWs = true;
-            } else if (url.startsWith('wss://')) {
-                tempUrl = url.replace('wss://', 'https://');
-                isWss = true;
-            }
-            
+            let isWs = false, isWss = false;
+            if (url.startsWith('ws://')) { tempUrl = url.replace('ws://', 'http://'); isWs = true; }
+            else if (url.startsWith('wss://')) { tempUrl = url.replace('wss://', 'https://'); isWss = true; }
             const urlObj = new URL(tempUrl, window.location.href);
             urlObj.searchParams.set('clientId', id);
-            
-            // Check if testing mode is active (either path has /v2 or host is kimeraware.macrostasis.dev/v2)
             if (window.location.pathname.includes('/v2')) {
                 urlObj.searchParams.set('testing', 'true');
-                console.log('[WebSocket Interceptor] Staging v2 client detected. Connecting with testing=true.');
+                console.log('[WS Interceptor] v2 staging client — connecting with testing=true');
             }
-            
             modifiedUrl = urlObj.toString();
-            
-            if (isWs) {
-                modifiedUrl = modifiedUrl.replace('http://', 'ws://');
-            } else if (isWss) {
-                modifiedUrl = modifiedUrl.replace('https://', 'wss://');
-            }
+            if (isWs) modifiedUrl = modifiedUrl.replace('http://', 'ws://');
+            else if (isWss) modifiedUrl = modifiedUrl.replace('https://', 'wss://');
         } catch(e) {
-            console.error('[WebSocket Interceptor] Failed to append clientId:', e);
+            console.error('[WS Interceptor] Failed to append clientId:', e);
         }
 
-        console.log('[WebSocket Interceptor] Intercepted WebSocket creation to:', modifiedUrl);
+        console.log('[WS Interceptor] Connecting to:', modifiedUrl);
         const ws = new OriginalWebSocket(modifiedUrl, protocols);
-        
+
         ws.addEventListener('open', () => {
-            console.log('[WebSocket Interceptor] WebSocket connected!');
+            console.log('[WS Interceptor] WebSocket connected!');
             window.wsConnected = true;
             window.wsProgress = 100;
-            if (typeof window.updateOverallProgress === 'function') {
-                window.updateOverallProgress();
-            }
+            if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
         });
 
-        // Decryption logic for encrypted WebSocket messages
+        // ── Decryption ──────────────────────────────────────────────────────
         let Ae = null;
         async function kt() {
             if (Ae) return Ae;
             const e = "75,87,95,65,82,71",
                   n = new Uint8Array(e.split(",").map(Number)),
                   t = new TextEncoder().encode("kimeraware-ws-2025"),
-                  i = await crypto.subtle.importKey("raw", n, {name: "HMAC", hash: "SHA-256"}, false, ["sign"]),
+                  i = await crypto.subtle.importKey("raw", n, {name:"HMAC",hash:"SHA-256"}, false, ["sign"]),
                   d = await crypto.subtle.sign("HMAC", i, t);
-            return Ae = await crypto.subtle.importKey("raw", d, {name: "AES-GCM"}, false, ["decrypt"]), Ae;
+            return Ae = await crypto.subtle.importKey("raw", d, {name:"AES-GCM"}, false, ["decrypt"]), Ae;
         }
-        
         async function decryptMessage(e) {
             try {
                 const n = Uint8Array.from(atob(e), r => r.charCodeAt(0)),
-                      t = n.slice(0, 12),
-                      i = n.slice(12, 28),
-                      d = n.slice(28),
-                      a = new Uint8Array(d.length + 16);
-                a.set(d);
-                a.set(i, d.length);
-                const u = await kt(),
-                      s = await crypto.subtle.decrypt({name: "AES-GCM", iv: t}, u, a);
+                      t = n.slice(0,12), i = n.slice(12,28), d = n.slice(28),
+                      a = new Uint8Array(d.length+16);
+                a.set(d); a.set(i, d.length);
+                const u = await kt(), s = await crypto.subtle.decrypt({name:"AES-GCM",iv:t}, u, a);
                 return JSON.parse(new TextDecoder().decode(s));
             } catch(err) {
                 try { return JSON.parse(e); } catch { throw err; }
             }
         }
 
-        // Helper to load image textures
+        // ── Image texture loader ────────────────────────────────────────────
         let textureLoader = null;
         function loadOverrideTexture(imgUrl, callback) {
-            if (!imgUrl) return;
+            if (!imgUrl) { if (callback) callback(null); return; }
             let resolvedUrl = imgUrl;
             if (imgUrl.startsWith('/assets/')) {
                 const host = window.location.hostname;
@@ -295,82 +252,180 @@
                     resolvedUrl = 'https://kimeraware.macrostasis.dev' + imgUrl;
                 }
             }
-            if (!textureLoader) {
-                textureLoader = new THREE.TextureLoader();
-            }
+            if (!textureLoader) textureLoader = new THREE.TextureLoader();
             const isExternal = resolvedUrl.startsWith('http') && !resolvedUrl.includes(window.location.hostname);
-            if (isExternal) {
-                textureLoader.setCrossOrigin('anonymous');
-            } else {
-                textureLoader.setCrossOrigin(undefined);
-            }
-            textureLoader.load(resolvedUrl, (texture) => {
+            textureLoader.setCrossOrigin(isExternal ? 'anonymous' : undefined);
+            textureLoader.load(resolvedUrl, texture => {
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.minFilter = THREE.LinearFilter;
                 texture.generateMipmaps = false;
                 texture.needsUpdate = true;
-                if (callback) {
-                    callback(texture);
-                } else {
-                    window.overrideTvTexture = texture;
-                    window.act2ImageTexture = texture;
-                }
-                console.log('[WebSocket Interceptor] Loaded override image texture:', resolvedUrl);
-            }, undefined, (err) => {
-                console.error('[WebSocket Interceptor] Failed to load override texture:', err);
+                console.log('[WS Interceptor] Loaded texture:', resolvedUrl);
+                if (callback) callback(texture);
+            }, undefined, err => {
+                console.error('[WS Interceptor] Failed to load texture:', err);
+                if (callback) callback(null);
             });
         }
 
+        // ── audioOnly handler ───────────────────────────────────────────────
+        // Flexible: audioOnly just means "play audio but don't show video stream".
+        // The screen shows whatever the current preset renders unless overrideTvTexture is set.
+        // ACT2 sets act2VisualSequenceActive=true to control the screen via overrideTvTexture.
         function handleAudioOnlyMessage(decrypted) {
-            if (decrypted.audioOnly) {
-                decrypted.mode = 'video'; // force video player to play stream
-                let imgUrl = decrypted.imageUrl || decrypted.imageData || decrypted.mainImageData;
-                if (!imgUrl && window.lastAppliedPreset) {
-                    imgUrl = window.lastAppliedPreset.mainImageData || window.lastAppliedPreset.imageData;
-                }
-                if (!imgUrl) {
-                    imgUrl = '/assets/padre_transparente.webp';
-                }
-                window.tvOverrideVolume = decrypted.videoVolume !== undefined ? decrypted.videoVolume : null;
-                
-                // Initialize overrideTvTexture synchronously to black to prevent any frame leak
-                window.overrideTvTexture = getBlackTexture();
-                window.act2ImageTexture = null;
-                
-                // Load the act2 image texture and store it
-                loadOverrideTexture(imgUrl, (texture) => {
-                    window.act2ImageTexture = texture;
-                    console.log('[WebSocket Interceptor] Loaded act2 override image texture:', imgUrl);
-                });
+            const isAudioOnly = decrypted.audioOnly === true || decrypted.audioOnly === 'true';
 
+            if (isAudioOnly) {
+                // Force the TV bundle to use 'video' mode so the audio stream plays
+                decrypted.mode = 'video';
+
+                window.tvOverrideVolume = decrypted.videoVolume !== undefined ? decrypted.videoVolume : null;
                 window.audioOnlyOverrideUntil = Date.now() + (decrypted.duration || 60) * 1000;
                 window.audioOnlyLocalStartTime = Date.now();
                 window.audioOnlyStartElapsed = (decrypted.originalDuration || 60) - (decrypted.duration || 60);
                 window.audioOnlyDuration = decrypted.duration || 60;
                 window.audioOnlyActive = true;
-                return true;
-            } else {
-                const isAudioOverrideActive = window.audioOnlyOverrideUntil && Date.now() < window.audioOnlyOverrideUntil;
-                if (!isAudioOverrideActive || decrypted.type === 'trigger_video') {
-                    window.overrideTvTexture = null;
-                    window.audioOnlyOverrideUntil = null;
+
+                // Save the image URL from this audioOnly trigger for use by ACT sequences
+                const imgUrl = decrypted.imageUrl || decrypted.imageData || decrypted.mainImageData;
+                if (imgUrl) {
+                    window.lastAct2ImageUrl = imgUrl;
+                    // Preload the texture now so it's ready when the visual sequence starts
+                    loadOverrideTexture(imgUrl, texture => {
+                        window.act2ImageTexture = texture;
+                        console.log('[WS Interceptor] audioOnly: preloaded image texture:', imgUrl);
+                    });
+                } else {
+                    window.lastAct2ImageUrl = null;
                     window.act2ImageTexture = null;
-                    window.defaultAct2BackgroundTexture = null;
-                    window.audioOnlyActive = false;
                 }
+
+                // Clear visual override — screen shows active preset normally
+                window.overrideTvTexture = null;
+                window.act2VisualSequenceActive = false;
+
+                console.log('[WS Interceptor] audioOnly activated. Duration:', decrypted.duration, 's. Image:', imgUrl || 'none');
+                return true; // modified — send to TV bundle
+            } else {
+                // Not audioOnly: clear all audioOnly state
+                window.audioOnlyActive = false;
+                window.audioOnlyOverrideUntil = null;
+                window.overrideTvTexture = null;
+                window.act2ImageTexture = null;
+                window.act2VisualSequenceActive = false;
                 return false;
             }
         }
 
+        // ── ACT2 visual sequence activator ──────────────────────────────────
+        // Called by the ACT2 runner (via WS message with act2VisualMode=true or presetId=act2)
+        // to activate the timed visual sequence on top of audioOnly.
+        function activateAct2VisualSequence(imageUrl) {
+            if (!window.audioOnlyActive) {
+                console.warn('[WS Interceptor] activateAct2VisualSequence called but audioOnly is not active');
+                return;
+            }
+            window.act2VisualSequenceActive = true;
+            window.act2ImageTexture = null;
+            // Start with black to prevent any frame leak
+            window.overrideTvTexture = getBlackTexture();
+
+            if (imageUrl) {
+                loadOverrideTexture(imageUrl, texture => {
+                    window.act2ImageTexture = texture;
+                    console.log('[WS Interceptor] ACT2 image texture loaded:', imageUrl);
+                });
+            }
+            console.log('[WS Interceptor] ACT2 visual sequence activated. Image URL:', imageUrl);
+        }
+        // Expose globally so event_runner_act2 can signal it via a custom WS message
+        window._activateAct2Visual = activateAct2VisualSequence;
+
+        // ── ACT pause/resume system ─────────────────────────────────────────
+        // Generic: works for any ACT (1, 2, 3...)
+        // When an ACT activates, we snapshot the current video state.
+        // When the ACT deactivates, we resume the video from the saved position.
+        function handleActActivated(actId) {
+            if (window.actCurrentlyActive) return; // already paused
+            window.actCurrentlyActive = true;
+            window.actActiveId = actId;
+
+            // Capture the current video state from the TV bundle's video element
+            const v = window.tvVideoElement;
+            if (v && v.src && !v.paused) {
+                const isLive = v.duration === Infinity || !isFinite(v.duration);
+                window.actPausedVideoInfo = {
+                    url: v.src,
+                    currentTime: v.currentTime,
+                    isLive: isLive,
+                    capturedAt: Date.now(),
+                    volume: v.volume,
+                    loop: v.loop,
+                    muted: v.muted
+                };
+                console.log(`[WS Interceptor] ACT${actId} activated — pausing video at ${v.currentTime.toFixed(2)}s (isLive: ${isLive})`);
+            } else {
+                window.actPausedVideoInfo = null;
+                console.log(`[WS Interceptor] ACT${actId} activated — no active video to pause`);
+            }
+        }
+
+        function handleActDeactivated(actId) {
+            if (!window.actCurrentlyActive || window.actActiveId !== actId) return;
+            window.actCurrentlyActive = false;
+            window.actActiveId = null;
+
+            const info = window.actPausedVideoInfo;
+            window.actPausedVideoInfo = null;
+
+            if (!info || !info.url) {
+                console.log(`[WS Interceptor] ACT${actId} ended — no video to resume`);
+                return;
+            }
+
+            // Resume the video through the TV bundle's video element
+            const v = window.tvVideoElement;
+            if (!v) {
+                console.warn('[WS Interceptor] Cannot resume video — no video element found');
+                return;
+            }
+
+            if (info.isLive) {
+                // For live streams: just ensure playback is running (seek to live edge)
+                console.log(`[WS Interceptor] ACT${actId} ended — resuming live stream`);
+                if (v.paused) {
+                    v.play().catch(e => console.warn('[WS Interceptor] Live resume play failed:', e));
+                }
+                // HLS.js will automatically snap back to live edge
+            } else {
+                // For VODs: calculate the correct position accounting for elapsed time
+                const elapsedSinceCapture = (Date.now() - info.capturedAt) / 1000;
+                const resumeTime = Math.min(
+                    (v.duration && isFinite(v.duration)) ? v.duration - 0.5 : Infinity,
+                    info.currentTime + elapsedSinceCapture
+                );
+                console.log(`[WS Interceptor] ACT${actId} ended — resuming VOD at ${resumeTime.toFixed(2)}s (original: ${info.currentTime.toFixed(2)}s + ${elapsedSinceCapture.toFixed(2)}s elapsed)`);
+                v.volume = info.volume;
+                v.muted = info.muted;
+                v.currentTime = resumeTime;
+                if (v.paused) {
+                    v.play().catch(e => console.warn('[WS Interceptor] VOD resume play failed:', e));
+                }
+            }
+        }
+
+        // ── Reset handler ───────────────────────────────────────────────────
         function handleResetMessage() {
             window.overrideTvTexture = null;
             window.audioOnlyOverrideUntil = null;
             window.act2ImageTexture = null;
-            window.defaultAct2BackgroundTexture = null;
             window.audioOnlyActive = false;
+            window.act2VisualSequenceActive = false;
+            window.actCurrentlyActive = false;
+            window.actPausedVideoInfo = null;
         }
 
-        // Create Proxy to intercept event listeners and message handler
+        // ── Proxy: intercept addEventListener and onmessage ─────────────────
         const proxy = new Proxy(ws, {
             get(target, prop, receiver) {
                 if (prop === 'addEventListener') {
@@ -380,22 +435,22 @@
                                 try {
                                     const decrypted = await decryptMessage(event.data);
                                     let modified = false;
-                                    
+
                                     if (decrypted && (decrypted.type === 'trigger_video' || decrypted.type === 'apply_preset')) {
-                                        if (decrypted.type === 'apply_preset') {
-                                            window.lastAppliedPreset = decrypted;
-                                        }
+                                        if (decrypted.type === 'apply_preset') window.lastAppliedPreset = decrypted;
                                         modified = handleAudioOnlyMessage(decrypted);
                                     } else if (decrypted && decrypted.type === 'reset') {
                                         handleResetMessage();
                                     }
-                                    
-                                    // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
+
+                                    // Block apply_preset from reaching TV bundle while audioOnly is active.
+                                    // The TV bundle would call Te() which resets the video player and cuts audio.
+                                    // The raw WS listener below still processes ACT state changes independently.
                                     if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
-                                        console.log('[WebSocket Interceptor] Blocking apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
+                                        console.log('[WS Interceptor] Blocking apply_preset from TV bundle (audioOnly active):', decrypted.presetId);
                                         return;
                                     }
-                                    
+
                                     if (modified) {
                                         const newEvent = new MessageEvent('message', {
                                             data: JSON.stringify(decrypted),
@@ -407,7 +462,7 @@
                                         return listener.call(this, newEvent);
                                     }
                                 } catch (e) {
-                                    console.error('[WebSocket Interceptor] Error wrapping addEventListener message event:', e);
+                                    console.error('[WS Interceptor] Error in addEventListener wrapper:', e);
                                 }
                                 return listener.call(this, event);
                             };
@@ -418,7 +473,7 @@
                         return target.addEventListener(type, listener, options);
                     };
                 }
-                
+
                 if (prop === 'removeEventListener') {
                     return function(type, listener, options) {
                         if (type === 'message' && target._wrappedListeners && target._wrappedListeners.has(listener)) {
@@ -429,11 +484,9 @@
                         return target.removeEventListener(type, listener, options);
                     };
                 }
- 
-                if (prop === 'onmessage') {
-                    return target.onmessage;
-                }
- 
+
+                if (prop === 'onmessage') return target.onmessage;
+
                 const value = target[prop];
                 return typeof value === 'function' ? value.bind(target) : value;
             },
@@ -444,22 +497,19 @@
                             try {
                                 const decrypted = await decryptMessage(event.data);
                                 let modified = false;
-                                
+
                                 if (decrypted && (decrypted.type === 'trigger_video' || decrypted.type === 'apply_preset')) {
-                                    if (decrypted.type === 'apply_preset') {
-                                        window.lastAppliedPreset = decrypted;
-                                    }
+                                    if (decrypted.type === 'apply_preset') window.lastAppliedPreset = decrypted;
                                     modified = handleAudioOnlyMessage(decrypted);
                                 } else if (decrypted && decrypted.type === 'reset') {
                                     handleResetMessage();
                                 }
-                                
-                                // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
+
                                 if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
-                                    console.log('[WebSocket Interceptor] Blocking onmessage apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
+                                    console.log('[WS Interceptor] Blocking onmessage apply_preset from TV bundle (audioOnly active):', decrypted.presetId);
                                     return;
                                 }
-                                
+
                                 if (modified) {
                                     const newEvent = new MessageEvent('message', {
                                         data: JSON.stringify(decrypted),
@@ -471,7 +521,7 @@
                                     return value.call(this, newEvent);
                                 }
                             } catch (e) {
-                                console.error('[WebSocket Interceptor] Error wrapping onmessage:', e);
+                                console.error('[WS Interceptor] Error in onmessage wrapper:', e);
                             }
                             return value.call(this, event);
                         };
@@ -484,7 +534,9 @@
             }
         });
 
-        // Intercept WS messages to trigger Act 1 & Act 2 sequence states in the proxy
+        // ── Raw WS message listener for ACT state detection ─────────────────
+        // This runs before the proxy and detects ACT activation/deactivation
+        // for any act (act1, act2, actN), triggering pause/resume of active video.
         ws.addEventListener('message', async (event) => {
             try {
                 let data;
@@ -494,68 +546,85 @@
                 } else if (typeof rawData === 'string') {
                     data = await decryptMessage(rawData);
                 }
-                
+
                 if (data) {
-                    // ── ACT1 detection ──────────────────────────────────────
                     if (data.type === 'apply_preset' || data.type === 'trigger_video') {
-                        const isAct1 = data.presetId === 'act1' || 
-                                       data.act1 === true ||
-                                       (data.text && data.text.toLowerCase().includes('act1')) ||
-                                       (data.videoUrl && data.videoUrl.toLowerCase().includes('act1'));
-                        
+
+                        // ── Generic ACT detection ─────────────────────────
+                        // Any preset with presetId matching /^act\d+$/i (act1, act2, act3...)
+                        // or explicit actN=true flag triggers the pause/resume system.
+                        const presetId = data.presetId || '';
+                        const actMatch = presetId.match(/^act(\d+)$/i);
+                        const actNum = actMatch ? parseInt(actMatch[1]) : null;
+
+                        if (actNum !== null) {
+                            // This is an ACT preset activation
+                            handleActActivated(actNum);
+                        } else if (data.type === 'apply_preset' && presetId && !presetId.startsWith('act')) {
+                            // Switching away from ACT preset
+                            if (window.actCurrentlyActive) {
+                                handleActDeactivated(window.actActiveId);
+                            }
+                        }
+
+                        // ── ACT1 specific ─────────────────────────────────
+                        const isAct1 = presetId === 'act1' || data.act1 === true;
                         if (isAct1) {
                             if (typeof window.setAct1 === 'function') window.setAct1(true);
-                            if (typeof window.setAct2 === 'function') window.setAct2(false); // mutual exclusion
-                        } else if (data.type === 'apply_preset' && data.presetId !== 'act1') {
+                            if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        } else if (data.type === 'apply_preset' && presetId !== 'act1') {
                             if (typeof window.setAct1 === 'function') window.setAct1(false);
                         }
 
-                        // ── ACT2 detection ──────────────────────────────────
-                        const isAct2 = data.presetId === 'act2' ||
-                                       data.act2 === true ||
-                                       (data.text && data.text.toLowerCase().includes('act2')) ||
-                                       (data.videoUrl && data.videoUrl.toLowerCase().includes('act2'));
-
+                        // ── ACT2 specific ─────────────────────────────────
+                        const isAct2 = presetId === 'act2' || data.act2 === true;
                         if (isAct2) {
                             if (typeof window.setAct2 === 'function') {
-                                const elapsed = data.elapsedSeconds || 0;
-                                window.setAct2(true, elapsed);
+                                window.setAct2(true, data.elapsedSeconds || 0);
                             }
-                            if (typeof window.setAct1 === 'function') window.setAct1(false); // mutual exclusion
-                        } else if (data.type === 'apply_preset' && data.presetId !== 'act2') {
+                            if (typeof window.setAct1 === 'function') window.setAct1(false);
+
+                            // Activate ACT2 visual sequence on top of audioOnly
+                            // The imageUrl is passed via the audioOnly trigger_video's imageUrl
+                            // We delay slightly to ensure audioOnly state is set first
+                            if (window.audioOnlyActive) {
+                                const imgUrl = data.mainImageData || window.lastAct2ImageUrl;
+                                activateAct2VisualSequence(imgUrl);
+                            }
+                        } else if (data.type === 'apply_preset' && presetId !== 'act2') {
                             if (typeof window.setAct2 === 'function') window.setAct2(false);
                         }
 
                     } else if (data.type === 'reset') {
                         if (typeof window.setAct1 === 'function') window.setAct1(false);
                         if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        if (window.actCurrentlyActive) {
+                            handleActDeactivated(window.actActiveId);
+                        }
                     }
                 }
             } catch(e) {
-                // Ignore errors
+                // Ignore decode errors on this listener
             }
         });
 
         return proxy;
     };
-    // Copy static properties of WebSocket
+
+    // Copy static WebSocket properties
     Object.getOwnPropertyNames(OriginalWebSocket).forEach(prop => {
-        if (OriginalWebSocket.hasOwnProperty(prop)) {
-            try {
-                window.WebSocket[prop] = OriginalWebSocket[prop];
-            } catch(e) {}
+        if (Object.prototype.hasOwnProperty.call(OriginalWebSocket, prop)) {
+            try { window.WebSocket[prop] = OriginalWebSocket[prop]; } catch(e) {}
         }
     });
     window.WebSocket.prototype = OriginalWebSocket.prototype;
-    
-    // Timeout to mark WS as loaded if connection takes too long
+
+    // Safety timeout: mark WS as loaded if connection takes too long
     setTimeout(() => {
         if (!window.wsConnected) {
-            console.warn('[Loader] WebSocket connection timed out, marking as loaded to proceed...');
+            console.warn('[WS Interceptor] WebSocket timed out — marking as loaded');
             window.wsProgress = 100;
-            if (typeof window.updateOverallProgress === 'function') {
-                window.updateOverallProgress();
-            }
+            if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
         }
     }, 5000);
 })();
