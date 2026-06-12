@@ -585,20 +585,8 @@
                     console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
                 }
 
-                // ACT2 EXIT detection: when a non-act2, non-black_screen preset arrives
-                // while act2 was running (even in a background tab), force-clean all state
-                // immediately so that on rAF resume there are no stale visual elements.
-                if (dec.type === 'apply_preset' &&
-                    dec.presetId !== 'act2' &&
-                    dec.presetId !== 'black_screen' &&
-                    (window.act2VisualSequenceActive || window.audioOnlyActive)) {
-                    _stopAudioPlayer();
-                    window.audioOnlyActive          = false;
-                    window.act2VisualSequenceActive = false;
-                    window.overrideTvTexture        = null;
-                    window.act2ImageTexture         = null;
-                    window.lastAct2ImageUrl         = null;
-                    console.log('[WS Interceptor] ACT2 exit: forced state cleanup (tab may have been backgrounded).');
+
+
                 }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
