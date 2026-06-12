@@ -128,11 +128,12 @@ function updateEnvironmentFromTime() {
         emissiveRed = THREE.MathUtils.lerp(emissiveRed, 0.06, f);
 
         // 5. Mist shader — share act1MistMaterial
+        // Use f (act2Factor) directly — only preserve act1Factor if it's higher.
+        // DO NOT use Math.max(current, f): that locks the value at 1.0 as f decreases,
+        // causing an instant snap to 0 when the block stops executing.
         if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
-            window.act1MistMaterial.uniforms.uOpacityFactor.value = Math.max(
-                window.act1MistMaterial.uniforms.uOpacityFactor.value,
-                f
-            );
+            const act1Opacity = (typeof window.act1Factor !== 'undefined') ? window.act1Factor : 0.0;
+            window.act1MistMaterial.uniforms.uOpacityFactor.value = Math.max(act1Opacity, f);
         }
     }
 
