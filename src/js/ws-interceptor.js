@@ -574,6 +574,15 @@
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
                 // state so the CRT material and ACT visuals stay in sync; only the
                 // audioOnly trigger_video is blocked to prevent VideoTexture creation.
+
+                // SEÑAL PENDIENTE defense: if act2 preset arrives and we're not yet in
+                // audioOnly mode (race condition: override hasn't arrived yet), immediately
+                // force a black texture so the TV bundle never renders SEÑAL PENDIENTE.
+                // The correct visual state will activate when audioOnly override arrives next.
+                if (dec.type === 'apply_preset' && dec.presetId === 'act2' && !window.audioOnlyActive) {
+                    window.overrideTvTexture = getBlackTex();
+                    console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
+                }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
                 window.audioOnlyActive          = false;
