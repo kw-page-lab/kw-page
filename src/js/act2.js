@@ -256,7 +256,7 @@ function _act2CreateFireflies() {
 window.updateAct2 = function(nowSec, deltaTime) {
     // ── Smooth factor lerp ──
     const a2SpeedGrow = 1.0 / 1.8;
-    const a2SpeedFadeOut = 1.0 / 8.0;
+    const a2SpeedFadeOut = 1.0 / 3.5; // match grass ACT2_SHRINK_DURATION so environment + grass finish together
     if (window.act2Factor < window.act2Target) {
         window.act2Factor = Math.min(window.act2Target, window.act2Factor + deltaTime * a2SpeedGrow);
     } else if (window.act2Factor > window.act2Target) {
