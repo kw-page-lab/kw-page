@@ -326,8 +326,8 @@ window.updateAct2 = function(nowSec, deltaTime) {
     }
 };
 
-// ─── Shift+A hotkey ──────────────────────────────────────────────────────────
-
+// ─── Shift+A hotkey (Disabled in production) ──────────────────────────────────
+/*
 window.addEventListener('keydown', function(e) {
     if (e.shiftKey && e.code === 'KeyA') {
         const next = !document.body.classList.contains('act2-active');
@@ -335,3 +335,4 @@ window.addEventListener('keydown', function(e) {
         window.setAct2(next);
     }
 });
+*/
