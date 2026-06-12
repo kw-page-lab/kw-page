@@ -585,9 +585,6 @@
                     console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
                 }
 
-
-
-                }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
                 window.audioOnlyActive          = false;
