@@ -64,6 +64,7 @@ canvas {
     color: #ffffff;
     font-size: clamp(20px, 3.5vw, 36px);
     font-family: 'SLNTHLN', sans-serif;
+    font-weight: bold;
     letter-spacing: 3px;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.95);
     text-align: center;

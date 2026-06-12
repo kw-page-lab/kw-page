@@ -313,24 +313,35 @@
                             } else if (m && m.uniforms) {
                                 // ── Active: determine texture for this frame ──
                                 let tex;
-                                if (elapsed < 11.0) {
-                                    // 0-11s: black
+                                const tl = window.audioOnlyTimeline || {
+                                    startFadeIn: 11.0,
+                                    startPlateau: 13.0,
+                                    startFadeOut: 50.0,
+                                    startStatic: 55.0
+                                };
+
+                                if (elapsed < tl.startFadeIn) {
+                                    // 0-startFadeIn: black
                                     if (ao) ao.volume = 0;
                                     tex = getBlackTex();
-                                } else if (elapsed < 13.0) {
-                                    // 11-13s: image fades in with audio
-                                    if (ao) ao.volume = ((elapsed - 11.0) / 2.0) * tgt;
+                                } else if (elapsed < tl.startPlateau) {
+                                    // startFadeIn-startPlateau: image fades in with audio
+                                    const fadeDur = tl.startPlateau - tl.startFadeIn;
+                                    const progress = fadeDur > 0 ? (elapsed - tl.startFadeIn) / fadeDur : 1.0;
+                                    if (ao) ao.volume = progress * tgt;
                                     tex = window.act2ImageTexture || getBlackTex();
-                                } else if (elapsed < 50.0) {
-                                    // 13-50s: full audio + image
+                                } else if (elapsed < tl.startFadeOut) {
+                                    // startPlateau-startFadeOut: full audio + image
                                     if (ao) ao.volume = tgt;
                                     tex = window.act2ImageTexture || getBlackTex();
-                                } else if (elapsed < 55.0) {
-                                    // 50-55s: audio fades out
-                                    if (ao) ao.volume = Math.max(0, ((55.0 - elapsed) / 5.0) * tgt);
+                                } else if (elapsed < tl.startStatic) {
+                                    // startFadeOut-startStatic: audio fades out
+                                    const fadeOutDur = tl.startStatic - tl.startFadeOut;
+                                    const progress = fadeOutDur > 0 ? (tl.startStatic - elapsed) / fadeOutDur : 0.0;
+                                    if (ao) ao.volume = Math.max(0, progress * tgt);
                                     tex = window.act2ImageTexture || getBlackTex();
                                 } else {
-                                    // 55-60s: static noise (full screen)
+                                    // startStatic onwards: static noise (full screen)
                                     if (ao) ao.volume = 0;
                                     tex = updateStaticNoise();
                                 }
@@ -467,6 +478,52 @@
             }, undefined, e => { console.error('[WS Interceptor] Texture fail:', url, e); cb && cb(null); });
         }
 
+        // ── Canvas-based image preprocessor (clamp dark pixels to true black) ──
+        function processImageAndClamp(imgUrl, threshold, cb) {
+            if (!imgUrl) { cb && cb(null); return; }
+            const resolvedUrl = _resolveAssetUrl(imgUrl);
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = function() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    const len = data.length;
+
+                    for (let i = 0; i < len; i += 4) {
+                        if (data[i] < threshold && data[i+1] < threshold && data[i+2] < threshold) {
+                            data[i]   = 0;
+                            data[i+1] = 0;
+                            data[i+2] = 0;
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+
+                    const tex = new THREE.CanvasTexture(canvas);
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    tex.minFilter = THREE.LinearFilter;
+                    tex.generateMipmaps = false;
+                    tex.needsUpdate = true;
+                    console.log('[WS Interceptor] Clamped texture ready (threshold=' + threshold + ')');
+                    cb && cb(tex);
+                } catch(e) {
+                    console.error('[WS Interceptor] Canvas clamp failed, fallback to normal:', e);
+                    loadTex(imgUrl, cb);
+                }
+            };
+            img.onerror = function(e) {
+                console.error('[WS Interceptor] Image load fail for clamping:', resolvedUrl, e);
+                cb && cb(null);
+            };
+            img.src = resolvedUrl;
+        }
+
         // ── handleAudioOnly ───────────────────────────────────────────────────
         // When audioOnly=true:
         //   1. BLOCK the trigger_video from reaching TV bundle
@@ -489,18 +546,33 @@
                 window.audioOnlyDuration       = dur;
                 window.audioOnlyActive         = true;
                 window.act2VisualSequenceActive = false; // visual activates when act2 preset arrives
+                window.audioOnlyTimeline       = dec.timeline || {
+                    startFadeIn: 11.0,
+                    startPlateau: 13.0,
+                    startFadeOut: 50.0,
+                    startStatic: 55.0
+                };
 
                 // Start separate audio player
                 _startAudioPlayer(dec.videoUrl || '', volPct, startElapsed);
 
                 // Preload ACT2 image
+                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 0;
                 const imgUrl = dec.imageUrl || dec.imageData || dec.mainImageData;
                 window.lastAct2ImageUrl = imgUrl || null;
                 if (imgUrl && !window.act2ImageTexture) {
-                    loadTex(imgUrl, tex => {
-                        window.act2ImageTexture = tex;
-                        console.log('[WS Interceptor] ACT2 image preloaded.');
-                    });
+                    const threshold = window.act2ClampThreshold || 0;
+                    if (threshold > 0) {
+                        processImageAndClamp(imgUrl, threshold, tex => {
+                            window.act2ImageTexture = tex;
+                            console.log('[WS Interceptor] ACT2 image preloaded (clamped).');
+                        });
+                    } else {
+                        loadTex(imgUrl, tex => {
+                            window.act2ImageTexture = tex;
+                            console.log('[WS Interceptor] ACT2 image preloaded.');
+                        });
+                    }
                 }
 
                 console.log('[WS Interceptor] audioOnly ON — blocking TV bundle, starting audio player. dur:', dur, 'img:', imgUrl);
@@ -520,6 +592,7 @@
                 window.overrideTvTexture        = null;
                 window.act2ImageTexture         = null;
                 window.lastAct2ImageUrl         = null;
+                window.act2ClampThreshold        = 0;
                 return false;
             }
         }
@@ -539,10 +612,18 @@
             if (window.act2ImageTexture) {
                 console.log('[WS Interceptor] ACT2 image already preloaded ✓');
             } else if (imgUrl) {
-                loadTex(imgUrl, tex => {
-                    window.act2ImageTexture = tex;
-                    console.log('[WS Interceptor] ACT2 image loaded (late load).');
-                });
+                const threshold = window.act2ClampThreshold || 0;
+                if (threshold > 0) {
+                    processImageAndClamp(imgUrl, threshold, tex => {
+                        window.act2ImageTexture = tex;
+                        console.log('[WS Interceptor] ACT2 image loaded (late, clamped).');
+                    });
+                } else {
+                    loadTex(imgUrl, tex => {
+                        window.act2ImageTexture = tex;
+                        console.log('[WS Interceptor] ACT2 image loaded (late load).');
+                    });
+                }
             }
             console.log('[WS Interceptor] ACT2 visual sequence ACTIVE. Image ready:', !!window.act2ImageTexture);
         }
@@ -592,6 +673,7 @@
                 window.overrideTvTexture        = null;
                 window.act2ImageTexture         = null;
                 window.lastAct2ImageUrl         = null;
+                window.act2ClampThreshold        = 0;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
                 window.shortVideoActive         = false; // clear Short portrait mode on reset
@@ -700,6 +782,16 @@
                     d = JSON.parse(event.data);
                 else d = await decrypt(event.data);
                 if (!d) return;
+
+                // ── Dynamic tagline updates ──
+                if (d.tagline1 !== undefined) {
+                    const el = document.getElementById('tagline-distorsiona');
+                    if (el) el.innerText = d.tagline1;
+                }
+                if (d.tagline2 !== undefined) {
+                    const el = document.getElementById('tagline-comienza');
+                    if (el) el.innerText = d.tagline2;
+                }
 
                 if (d.type === 'apply_preset' || d.type === 'trigger_video') {
                     const pid = d.presetId || '';
