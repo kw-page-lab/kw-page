@@ -230,29 +230,6 @@
         return _blankTextTex;
     }
 
-    // ── ACT2 exit fade overlay ──────────────────────────────────────────────────────
-    // When ACT2 ends, the TV bundle snaps background/fog/darkness to default instantly.
-    // We show a CSS black overlay on top of the canvas that fades out smoothly,
-    // masking the snap and revealing the clean default state softly.
-    function _showAct2EndOverlay() {
-        const existing = document.getElementById('kw-act2-end');
-        if (existing) { existing.remove(); }
-        if (!document.body) return; // guard: DOM not ready (shouldn’t happen but safe)
-        const el = document.createElement('div');
-        el.id = 'kw-act2-end';
-        el.style.cssText = [
-            'position:fixed', 'top:0', 'left:0', 'width:100%', 'height:100%',
-            'background:#000', 'opacity:1', 'z-index:9998', 'pointer-events:none',
-            'transition:opacity 1.2s ease-in-out'
-        ].join(';');
-        document.body.appendChild(el);
-        // Hold at black briefly, then fade out
-        setTimeout(() => {
-            el.style.opacity = '0';
-            setTimeout(() => { if (el.parentNode) el.remove(); }, 1300);
-        }, 350);
-        console.log('[WS Interceptor] ACT2 exit fade overlay shown.');
-    }
 
     // ── Intercept video element creation for pause/resume tracking ────────────
     const _origCE = document.createElement.bind(document);
@@ -610,8 +587,7 @@
 
                 // ACT2 EXIT detection: when a non-act2, non-black_screen preset arrives
                 // while act2 was running (even in a background tab), force-clean all state
-                // immediately. This handles the case where the rAF was paused (tab in
-                // background) and the cleanup timeline never ran.
+                // immediately so that on rAF resume there are no stale visual elements.
                 if (dec.type === 'apply_preset' &&
                     dec.presetId !== 'act2' &&
                     dec.presetId !== 'black_screen' &&
@@ -622,9 +598,7 @@
                     window.overrideTvTexture        = null;
                     window.act2ImageTexture         = null;
                     window.lastAct2ImageUrl         = null;
-                    // Show smooth fade overlay to mask the instant preset-change snap
-                    _showAct2EndOverlay();
-                    console.log('[WS Interceptor] ACT2 exit: forced state cleanup + fade overlay (tab may have been backgrounded).');
+                    console.log('[WS Interceptor] ACT2 exit: forced state cleanup (tab may have been backgrounded).');
                 }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
