@@ -16,6 +16,11 @@
     window.act2ImageTexture         = null;
     window.lastAct2ImageUrl         = null;
 
+    // Video override race condition protection
+    window.videoOverrideActive      = false;
+    window.videoOverridePlaying     = false;
+    window.pendingPresetMsg         = null;
+
     // YouTube Shorts portrait pillarbox
     // uScaleX > 1 = pillarboxed (content narrower than full screen)
     // For 9:16 Short on ~1.14:1 CRT screen → uScaleX ≈ 2.0 → content fills ~50% screen width, centered
@@ -593,6 +598,9 @@
                 window.act2ImageTexture         = null;
                 window.lastAct2ImageUrl         = null;
                 window.act2ClampThreshold        = 0;
+                window.videoOverrideActive      = false;
+                window.videoOverridePlaying     = false;
+                window.pendingPresetMsg         = null;
                 return false;
             }
         }
@@ -651,6 +659,43 @@
                         window.shortVideoActive = newIsShort;
                         console.log(`[WS Interceptor] Short portrait mode: ${newIsShort ? 'ON (uScaleX=' + window.shortScaleX + ')' : 'OFF'}`);
                     }
+
+                    const isAO = dec.audioOnly === true || dec.audioOnly === 'true';
+                    if (!isAO) {
+                        window.videoOverrideActive = true;
+                        window.videoOverridePlaying = false;
+                        window.pendingPresetMsg = null;
+
+                        setTimeout(() => {
+                            const v = window.tvVideoElement;
+                            if (v) {
+                                const onPlaying = () => {
+                                    console.log('[WS Interceptor] TV video playing -> flushing presets.');
+                                    window.videoOverridePlaying = true;
+                                    flushPendingPresets();
+                                    v.removeEventListener('playing', onPlaying);
+                                    v.removeEventListener('error', onError);
+                                };
+                                const onError = () => {
+                                    console.log('[WS Interceptor] TV video error -> flushing presets.');
+                                    window.videoOverridePlaying = true;
+                                    flushPendingPresets();
+                                    v.removeEventListener('playing', onPlaying);
+                                    v.removeEventListener('error', onError);
+                                };
+                                v.addEventListener('playing', onPlaying);
+                                v.addEventListener('error', onError);
+                            }
+                        }, 100);
+
+                        setTimeout(() => {
+                            if (!window.videoOverridePlaying) {
+                                console.log('[WS Interceptor] Video override playing safeguard fired.');
+                                window.videoOverridePlaying = true;
+                                flushPendingPresets();
+                            }
+                        }, 6000);
+                    }
                 }
 
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
@@ -677,6 +722,9 @@
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
                 window.shortVideoActive         = false; // clear Short portrait mode on reset
+                window.videoOverrideActive      = false;
+                window.videoOverridePlaying     = false;
+                window.pendingPresetMsg         = null;
             }
             return { block, modified };
         }
@@ -730,11 +778,30 @@
             }
         }
 
+        function flushPendingPresets() {
+            if (window.pendingPresetMsg) {
+                console.log('[WS Interceptor] Flushing pending preset message to TV bundle.');
+                const { listener, event, context } = window.pendingPresetMsg;
+                window.pendingPresetMsg = null;
+                try {
+                    listener.call(context, event);
+                } catch(e) { console.error('[WS Interceptor] Failed to flush pending preset:', e); }
+            }
+        }
+
         // ── Wrap a listener ───────────────────────────────────────────────────
         function wrap(listener) {
             return async function(event) {
                 try {
                     const dec = await decrypt(event.data);
+
+                    // Delay apply_preset if video override is loading but not yet playing
+                    if (dec && dec.type === 'apply_preset' && window.videoOverrideActive && !window.videoOverridePlaying) {
+                        console.log('[WS Interceptor] Delaying apply_preset until video override starts playing.');
+                        window.pendingPresetMsg = { listener, event, context: this };
+                        return;
+                    }
+
                     const { block } = processMsg(dec);
                     if (block) return;
                 } catch(e) { console.error('[WS Interceptor]', e); }
