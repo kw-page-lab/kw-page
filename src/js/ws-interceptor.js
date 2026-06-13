@@ -1,530 +1,881 @@
-// WebSocket Interceptor to track connection state
+// WebSocket Interceptor — KimeraWare v21-final
+// Strategy: audioOnly uses a SEPARATE <audio> element completely outside TV bundle.
+// TV bundle never enters video mode during audioOnly → zero texture leaks possible.
 (function() {
     window.wsConnected = false;
-    window.wsProgress = 0;
-    window.overrideTvTexture = null;
-    window.audioOnlyOverrideUntil = null;
-    window.tvOverrideVolume = null;
-    window.act2ImageTexture = null;
-    window.tvVideoElement = null;
-    window.audioOnlyActive = false;
-    window.audioOnlyDuration = 60;
-    window.tvOriginalIsVideoVal = 0;
+    window.wsProgress  = 0;
 
-    // Static noise texture generator to display clean static at the end
-    let staticCanvas = null;
-    let staticCtx = null;
-    let staticTexture = null;
+    // ── Global state ──────────────────────────────────────────────────────────
+    window.overrideTvTexture        = null;   // THREE.Texture to force on CRT screen
+    window.audioOnlyActive          = false;  // audioOnly is running
+    window.audioOnlyDuration        = 60;
+    window.audioOnlyStartElapsed    = 0;
+    window.audioOnlyLocalStartTime  = 0;
+    window.tvOverrideVolume         = null;   // 0-100
+    window.act2VisualSequenceActive = false;
+    window.act2ImageTexture         = null;
+    window.lastAct2ImageUrl         = null;
 
-    function updateStaticNoise() {
-        if (!staticCanvas) {
-            staticCanvas = document.createElement('canvas');
-            staticCanvas.width = 256;
-            staticCanvas.height = 256;
-            staticCtx = staticCanvas.getContext('2d');
-            staticTexture = new THREE.CanvasTexture(staticCanvas);
-            staticTexture.minFilter = THREE.NearestFilter;
-            staticTexture.magFilter = THREE.NearestFilter;
-        }
-        let imgData = staticCtx.createImageData(256, 256);
-        let data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            let val = Math.floor(Math.random() * 255);
-            data[i] = val;
-            data[i+1] = val;
-            data[i+2] = val;
-            data[i+3] = 255;
-        }
-        staticCtx.putImageData(imgData, 0, 0);
-        staticTexture.needsUpdate = true;
-    }
+    // (video override race protection removed — server now sends apply_preset before trigger_video)
 
-    let blackTexture = null;
-    function getBlackTexture() {
-        if (!blackTexture) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1;
-            canvas.height = 1;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, 1, 1);
-            blackTexture = new THREE.CanvasTexture(canvas);
-        }
-        return blackTexture;
-    }
+    // YouTube Shorts portrait pillarbox
+    // uScaleX > 1 = pillarboxed (content narrower than full screen)
+    // For 9:16 Short on ~1.14:1 CRT screen → uScaleX ≈ 2.0 → content fills ~50% screen width, centered
+    window.shortVideoActive = false;
+    window.shortScaleX      = 2.0;
 
+    // Pending states to resolve initialization race condition
+    window.pendingAct1State = null;
+    window.pendingAct2State = null;
 
-    // Intercept video element creation to get direct access to its volume and progress
-    const originalCreateElement = document.createElement;
-    document.createElement = function(tagName, options) {
-        const el = originalCreateElement.call(document, tagName, options);
-        if (tagName && tagName.toLowerCase() === 'video') {
-            window.tvVideoElement = el;
-            console.log('[WebSocket Interceptor] Intercepted TV video element creation');
-        }
-        return el;
-    };
-    
-    // Auto-wrap KimerawareTV to intercept crtScreen texture in update loop
-    let _kimerawareTV = undefined;
-    Object.defineProperty(window, 'KimerawareTV', {
-        get() {
-            return _kimerawareTV;
-        },
-        set(val) {
-            _kimerawareTV = val;
-            if (val && val.loadTV && !val.loadTV.isWrapped) {
-                console.log('[WebSocket Interceptor] Wrapping KimerawareTV.loadTV for texture override support');
-                const originalLoadTV = val.loadTV;
-                val.loadTV = function() {
-                    return originalLoadTV.apply(this, arguments).then(tv => {
-                        const material = tv.crtScreen.material;
-                        if (material && material.uniforms) {
-                            // Hijack uTexture via getter/setter to guarantee ZERO-leak video frames
-                            const uTextureUniform = material.uniforms.uTexture;
-                            if (uTextureUniform) {
-                                let originalTextureVal = uTextureUniform.value;
-                                Object.defineProperty(uTextureUniform, 'value', {
-                                    get() {
-                                        if (window.audioOnlyActive) {
-                                            return window.overrideTvTexture || getBlackTexture();
-                                        }
-                                        return originalTextureVal;
-                                    },
-                                    set(val) {
-                                        originalTextureVal = val;
-                                    },
-                                    configurable: true
-                                });
-                            }
-
-                            // Hijack uIsVideo to always report 0 when audioOnly is active
-                            const uIsVideoUniform = material.uniforms.uIsVideo;
-                            if (uIsVideoUniform) {
-                                let originalIsVideoVal = uIsVideoUniform.value;
-                                Object.defineProperty(uIsVideoUniform, 'value', {
-                                    get() {
-                                        if (window.audioOnlyActive) {
-                                            return 0;
-                                        }
-                                        return originalIsVideoVal;
-                                    },
-                                    set(val) {
-                                        originalIsVideoVal = val;
-                                        window.tvOriginalIsVideoVal = val;
-                                    },
-                                    configurable: true
-                                });
-                            }
-                        }
-
-                        const originalUpdate = tv.update;
-                        tv.update = function(time, delta) {
-                            // Custom ACT2 sequence control on client side:
-                            if (window.audioOnlyActive) {
-                                const elapsed = (window.audioOnlyStartElapsed !== undefined ? window.audioOnlyStartElapsed : 0) + 
-                                                (Date.now() - (window.audioOnlyLocalStartTime || Date.now())) / 1000;
-                                const duration = window.audioOnlyDuration || 60;
-
-                                if (elapsed >= duration) {
-                                    if (window.tvOriginalIsVideoVal !== 1) {
-                                        window.audioOnlyActive = false;
-                                        window.overrideTvTexture = null;
-                                        console.log('[WebSocket Interceptor] Audio-only sequence completed and TV mode is no longer video. Deactivating override.');
-                                    } else {
-                                        // Keep showing static noise to prevent any frame leak until the TV bundle actually exits video mode
-                                        updateStaticNoise();
-                                        window.overrideTvTexture = staticTexture;
-                                    }
-                                } else {
-                                    // 1. First 11 seconds (poweroff 5s + grass grow 6s): silence, show black background
-                                    if (elapsed < 11.0) {
-                                        if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
-                                        window.overrideTvTexture = getBlackTexture();
-                                    } 
-                                    // 2. Second 11 to 50: show image, volume fades in from 11.0 to 13.0s (over 2 seconds)
-                                    else if (elapsed >= 11.0 && elapsed < 50.0) {
-                                        const targetVolume = (window.tvOverrideVolume !== null) ? window.tvOverrideVolume / 100 : 0.9;
-                                        if (window.tvVideoElement) {
-                                            if (elapsed < 13.0) {
-                                                const t = (elapsed - 11.0) / 2.0;
-                                                window.tvVideoElement.volume = t * targetVolume;
-                                            } else {
-                                                window.tvVideoElement.volume = targetVolume;
-                                            }
-                                        }
-                                        window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
-                                    } 
-                                    // 3. Second 50 to 55: volume fades out over 5 seconds (50.0 to 55.0s)
-                                    else if (elapsed >= 50.0 && elapsed < 55.0) {
-                                        const targetVolume = (window.tvOverrideVolume !== null) ? window.tvOverrideVolume / 100 : 0.9;
-                                        if (window.tvVideoElement) {
-                                            const t = (55.0 - elapsed) / 5.0; // 1.0 down to 0.0
-                                            window.tvVideoElement.volume = Math.max(0.0, t * targetVolume);
-                                        }
-                                        window.overrideTvTexture = window.act2ImageTexture || getBlackTexture();
-                                    } 
-                                    // 4. Second 55 to 60: silence, image disappears, show static (no text)
-                                    else {
-                                        if (window.tvVideoElement) window.tvVideoElement.volume = 0.0;
-                                        updateStaticNoise();
-                                        window.overrideTvTexture = staticTexture;
-                                    }
-                                }
-                            }
-                            
-                            originalUpdate.call(this, time, delta);
-                        };
-                        return tv;
-                    });
-                };
-                val.loadTV.isWrapped = true;
+    let _setAct2Val = null;
+    Object.defineProperty(window, 'setAct2', {
+        get() { return _setAct2Val; },
+        set(fn) {
+            _setAct2Val = fn;
+            if (typeof fn === 'function' && window.pendingAct2State) {
+                const s = window.pendingAct2State;
+                window.pendingAct2State = null;
+                console.log('[WS Interceptor] Executing pending setAct2:', s);
+                fn(s.active, s.elapsedSeconds);
             }
         },
         configurable: true
     });
 
-    const OriginalWebSocket = window.WebSocket;
+    let _setAct1Val = null;
+    Object.defineProperty(window, 'setAct1', {
+        get() { return _setAct1Val; },
+        set(fn) {
+            _setAct1Val = fn;
+            if (typeof fn === 'function' && window.pendingAct1State) {
+                const s = window.pendingAct1State;
+                window.pendingAct1State = null;
+                console.log('[WS Interceptor] Executing pending setAct1:', s);
+                fn(s.active);
+            }
+        },
+        configurable: true
+    });
+
+    // Generic ACT pause/resume
+    window.actCurrentlyActive = false;
+    window.actActiveId        = null;
+    window.actPausedVideoInfo = null;
+
+    // ── Separate audio-only player ────────────────────────────────────────────
+    // Completely independent of the TV bundle. TV bundle stays in preset mode.
+    let _aoHls   = null;
+    let _aoVideo = null;
+
+    function _resolveAssetUrl(url) {
+        if (!url) return url;
+        // Assets live on kimeraware.macrostasis.dev, not on GitHub Pages (kimeraware.com)
+        if (url.startsWith('/assets/') || url.startsWith('/hls-')) {
+            const h = location.hostname;
+            if (h !== 'localhost' && !h.includes('127.0.0.1') && !h.includes('macrostasis.dev')) {
+                return 'https://kimeraware.macrostasis.dev' + url;
+            }
+        }
+        return url;
+    }
+
+    function _startAudioPlayer(videoUrl, volPct, startElapsed) {
+        _stopAudioPlayer();
+        const resolvedUrl = _resolveAssetUrl(videoUrl);
+        const vid = document.createElement('audio'); // audio element, not video
+        vid.crossOrigin = 'anonymous';
+        vid.volume = Math.max(0, Math.min(1, (volPct != null ? volPct : 90) / 100));
+        // Store reference so tv.update can control fade in/out
+        _aoVideo = vid;
+        window._aoPlayerElement = vid;
+
+        const tryPlay = () => {
+            if (startElapsed > 0 && isFinite(vid.duration) && vid.duration > 0) {
+                vid.currentTime = Math.min(vid.duration - 1, startElapsed);
+            }
+            vid.play().catch(err => {
+                console.warn('[AudioOnly] Autoplay blocked:', err.message, '— will retry on interaction');
+                const retry = () => { vid.play().catch(() => {}); };
+                document.addEventListener('click',     retry, { once: true });
+                document.addEventListener('touchstart', retry, { once: true });
+            });
+        };
+
+        if (resolvedUrl && resolvedUrl.includes('.m3u8') && typeof Hls !== 'undefined' && Hls.isSupported()) {
+            _aoHls = new Hls({ enableWorker: false, debug: false });
+            _aoHls.loadSource(resolvedUrl);
+            _aoHls.attachMedia(vid);
+            _aoHls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+            _aoHls.on(Hls.Events.ERROR, (e, d) => {
+                if (d.fatal) console.error('[AudioOnly HLS]', d.type, d.details);
+            });
+        } else if (resolvedUrl) {
+            vid.src = resolvedUrl;
+            vid.addEventListener('canplay', tryPlay, { once: true });
+            vid.load();
+        }
+        console.log('[AudioOnly] Audio player started:', resolvedUrl, '(original:', videoUrl + ')', 'vol:', volPct + '%');
+
+    }
+
+    function _stopAudioPlayer() {
+        if (_aoHls)  { try { _aoHls.destroy(); } catch(e){} _aoHls = null; }
+        if (_aoVideo) {
+            try { _aoVideo.pause(); _aoVideo.src = ''; } catch(e){}
+            _aoVideo = null;
+        }
+        window._aoPlayerElement = null;
+    }
+
+    // ── Static noise texture ─────────────────────────────────────────────────
+    let _sCanvas = null, _sCtx = null, _sTex = null;
+    function updateStaticNoise() {
+        if (!_sCanvas) {
+            _sCanvas = document.createElement('canvas');
+            _sCanvas.width = _sCanvas.height = 512;
+            _sCanvas.height = 512;
+            _sCtx = _sCanvas.getContext('2d');
+            _sTex = new THREE.CanvasTexture(_sCanvas);
+            _sTex.minFilter = _sTex.magFilter = THREE.NearestFilter;
+        }
+        const id = _sCtx.createImageData(512, 512);
+        for (let i = 0; i < id.data.length; i += 4) {
+            const v = Math.random() * 255 | 0;
+            id.data[i] = id.data[i+1] = id.data[i+2] = v; id.data[i+3] = 255;
+        }
+        _sCtx.putImageData(id, 0, 0);
+        _sTex.needsUpdate = true;
+        return _sTex;
+    }
+
+    // ── Uniform lock helpers ──────────────────────────────────────────────────
+    // The TV bundle's Lt() runs AFTER tv.update(), so it overwrites our uniforms.
+    // We lock specific uniforms so no external code can change them during ACT2.
+    let _lockedUniforms = {};
+    function lockUniform(uniforms, key, lockedValue) {
+        if (!uniforms || !(key in uniforms)) return;
+        const u = uniforms[key];
+        if (u.__kwLocked) return; // already locked
+        const original = Object.getOwnPropertyDescriptor(u, 'value');
+        u.__kwLocked = true;
+        u.__kwOrigDesc = original;
+        Object.defineProperty(u, 'value', {
+            get() { return lockedValue; },
+            set(_v) { /* blocked during ACT2 */ },
+            configurable: true,
+            enumerable: true
+        });
+        _lockedUniforms[key] = { u, lockedValue };
+    }
+    function setLockedUniformValue(key, newValue) {
+        if (_lockedUniforms[key]) {
+            _lockedUniforms[key].lockedValue = newValue;
+            const u = _lockedUniforms[key].u;
+            // Re-define with new locked value
+            Object.defineProperty(u, 'value', {
+                get() { return newValue; },
+                set(_v) { /* blocked during ACT2 */ },
+                configurable: true,
+                enumerable: true
+            });
+        }
+    }
+    function unlockUniform(uniforms, key) {
+        if (!uniforms || !(key in uniforms)) return;
+        const u = uniforms[key];
+        if (!u.__kwLocked) return;
+        const origDesc = u.__kwOrigDesc;
+        if (origDesc) {
+            Object.defineProperty(u, 'value', origDesc);
+        } else {
+            Object.defineProperty(u, 'value', { value: 1, writable: true, configurable: true, enumerable: true });
+        }
+        u.__kwLocked = false;
+        delete u.__kwOrigDesc;
+        delete _lockedUniforms[key];
+    }
+    function lockAct2Uniforms(m, tex) {
+        if (!m || !m.uniforms) return;
+        lockUniform(m.uniforms, 'uScaleX', 1);
+        lockUniform(m.uniforms, 'uScaleY', 1);
+        lockUniform(m.uniforms, 'uIsVideo', 0);
+        lockUniform(m.uniforms, 'uChildVisibility', 0);
+        lockUniform(m.uniforms, 'uTexture', tex);
+        lockUniform(m.uniforms, 'uTextureText', null);
+    }
+    function unlockAct2Uniforms(m) {
+        if (!m || !m.uniforms) return;
+        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText'].forEach(k => unlockUniform(m.uniforms, k));
+    }
+
+    let _blackTex = null;
+    function getBlackTex() {
+        if (!_blackTex) {
+            const c = document.createElement('canvas'); c.width = c.height = 1;
+            c.getContext('2d').fillStyle = '#000'; c.getContext('2d').fillRect(0,0,1,1);
+            _blackTex = new THREE.CanvasTexture(c);
+        }
+        return _blackTex;
+    }
+
+    let _blankTextTex = null;
+    function getBlankTextTex() {
+        if (!_blankTextTex) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 1024;
+            _blankTextTex = new THREE.CanvasTexture(c);
+            _blankTextTex.colorSpace = THREE.SRGBColorSpace;
+            _blankTextTex.minFilter = THREE.LinearFilter;
+            _blankTextTex.generateMipmaps = false;
+        }
+        return _blankTextTex;
+    }
+
+
+    // ── Intercept video element creation for pause/resume tracking ────────────
+    const _origCE = document.createElement.bind(document);
+    document.createElement = function(tag, opts) {
+        const el = _origCE(tag, opts);
+        if (typeof tag === 'string' && tag.toLowerCase() === 'video') {
+            window.tvVideoElement = el;
+        }
+        return el;
+    };
+
+    // ── KimerawareTV.loadTV wrapper ───────────────────────────────────────────
+    // Purpose: install uTexture getter so ACT2 can override what shows on the CRT.
+    // Note: when audioOnly is active, TV bundle is in PRESET mode (not video mode)
+    // so there is no video texture to leak. overrideTvTexture is only set during
+    // act2VisualSequenceActive (t=11s→60s phase).
+    let _kwTV;
+    Object.defineProperty(window, 'KimerawareTV', {
+        get() { return _kwTV; },
+        set(val) {
+            _kwTV = val;
+            if (!val || !val.loadTV || val.loadTV.isWrapped) return;
+            const _origLoad = val.loadTV;
+            val.loadTV = function() {
+                return _origLoad.apply(this, arguments).then(tv => {
+                    const mat = tv && tv.crtScreen && tv.crtScreen.material;
+                    if (mat && mat.uniforms) {
+
+                        // Store references to uniforms — we write directly each frame
+                        // instead of using getters (getters can be bypassed by THREE.js caching)
+                        window._kwMat       = mat;
+                        window._kwOrigTex       = mat.uniforms.uTexture      ? mat.uniforms.uTexture.value      : null;
+                        window._kwOrigTextTex   = mat.uniforms.uTextureText  ? mat.uniforms.uTextureText.value  : null;
+                        window._kwOrigChildVis  = mat.uniforms.uChildVisibility ? mat.uniforms.uChildVisibility.value : 0;
+                        window._kwOrigIsVid     = mat.uniforms.uIsVideo      ? mat.uniforms.uIsVideo.value      : 0;
+                    }
+
+                    // ── Per-frame ACT2 visual timeline ────────────────────────
+                    // Strategy: run AFTER the TV bundle's Lt() so we always win.
+                    // We wrap tv.update so our code runs LAST, after the bundle
+                    // has already called Lt() internally.
+                    // For scale: we LOCK the uScaleX/uScaleY uniforms so even if
+                    // Lt() runs after us, its write is silently swallowed.
+                    let _act2UniformsLocked = false;
+                    const _origUp = tv.update;
+                    tv.update = function(time, delta) {
+                        // Run the original update (which calls Lt() internally)
+                        _origUp.call(this, time, delta);
+
+                        // Now override AFTER Lt() has run — we always win
+                        if (window.audioOnlyActive && window.act2VisualSequenceActive) {
+                            const elapsed = window.audioOnlyStartElapsed +
+                                (Date.now() - window.audioOnlyLocalStartTime) / 1000;
+                            const dur = window.audioOnlyDuration || 60;
+                            const tgt = (window.tvOverrideVolume != null ? window.tvOverrideVolume : 90) / 100;
+                            const ao  = window._aoPlayerElement;
+                            const m   = window._kwMat;
+
+                            if (elapsed >= dur) {
+                                // ── Sequence done: unlock + restore original uniforms ──
+                                if (ao) ao.volume = 0;
+                                _stopAudioPlayer();
+                                if (_act2UniformsLocked) {
+                                    unlockAct2Uniforms(m);
+                                    _act2UniformsLocked = false;
+                                }
+                                if (m && m.uniforms) {
+                                    if (m.uniforms.uTexture) m.uniforms.uTexture.value = window._kwOrigTex;
+                                    if (m.uniforms.uTextureText) m.uniforms.uTextureText.value = window._kwOrigTextTex;
+                                    if (m.uniforms.uChildVisibility) m.uniforms.uChildVisibility.value = window._kwOrigChildVis;
+                                    if (m.uniforms.uScaleX) m.uniforms.uScaleX.value = 1;
+                                    if (m.uniforms.uScaleY) m.uniforms.uScaleY.value = 1;
+                                    if (m.uniforms.uIsVideo) m.uniforms.uIsVideo.value = window._kwOrigIsVid;
+                                    m.needsUpdate = true;
+                                }
+                                window.audioOnlyActive          = false;
+                                window.act2VisualSequenceActive = false;
+                                window.overrideTvTexture        = null;
+                                console.log('[WS Interceptor] ACT2 sequence complete — uniforms restored.');
+
+                            } else if (m && m.uniforms) {
+                                // ── Active: determine texture for this frame ──
+                                let tex;
+                                const tl = window.audioOnlyTimeline || {
+                                    startFadeIn: 11.0,
+                                    startPlateau: 13.0,
+                                    startFadeOut: 50.0,
+                                    startStatic: 55.0
+                                };
+
+                                if (elapsed < tl.startFadeIn) {
+                                    // 0-startFadeIn: black
+                                    if (ao) ao.volume = 0;
+                                    tex = getBlackTex();
+                                } else if (elapsed < tl.startPlateau) {
+                                    // startFadeIn-startPlateau: image fades in with audio
+                                    const fadeDur = tl.startPlateau - tl.startFadeIn;
+                                    const progress = fadeDur > 0 ? (elapsed - tl.startFadeIn) / fadeDur : 1.0;
+                                    if (ao) ao.volume = progress * tgt;
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else if (elapsed < tl.startFadeOut) {
+                                    // startPlateau-startFadeOut: full audio + image
+                                    if (ao) ao.volume = tgt;
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else if (elapsed < tl.startStatic) {
+                                    // startFadeOut-startStatic: audio fades out
+                                    const fadeOutDur = tl.startStatic - tl.startFadeOut;
+                                    const progress = fadeOutDur > 0 ? (tl.startStatic - elapsed) / fadeOutDur : 0.0;
+                                    if (ao) ao.volume = Math.max(0, progress * tgt);
+                                    tex = window.act2ImageTexture || getBlackTex();
+                                } else {
+                                    // startStatic onwards: static noise (full screen)
+                                    if (ao) ao.volume = 0;
+                                    tex = updateStaticNoise();
+                                }
+
+                                // Lock uniforms on first active frame (prevents Lt() overwrite)
+                                if (!_act2UniformsLocked) {
+                                    lockAct2Uniforms(m, tex);
+                                    _act2UniformsLocked = true;
+                                    console.log('[WS Interceptor] ACT2: uniforms locked (prevents Lt() scale override).');
+                                } else {
+                                    // Update locked values each frame
+                                    setLockedUniformValue('uTexture', tex);
+                                    setLockedUniformValue('uTextureText', getBlankTextTex());
+                                }
+                                m.needsUpdate = true;
+                            }
+                        } else if (_act2UniformsLocked) {
+                            // Safety: if sequence stopped unexpectedly, unlock
+                            const m = window._kwMat;
+                            unlockAct2Uniforms(m);
+                            _act2UniformsLocked = false;
+                            console.log('[WS Interceptor] ACT2: uniforms unlocked (safety cleanup).');
+                        }
+
+                        // ── Short video portrait pillarbox ─────────────────────────────────
+                        // If a YouTube Short (9:16) is active and we're NOT in an ACT2 sequence,
+                        // apply uScaleX > 1 so the video appears in a centered portrait column.
+                        // The TV bundle does NOT touch uScaleX in video mode, so one write per
+                        // frame is enough to maintain it.
+                        if (window.shortVideoActive &&
+                            !window.act2VisualSequenceActive &&
+                            !window.audioOnlyActive) {
+                            const m = window._kwMat;
+                            if (m && m.uniforms) {
+                                if (m.uniforms.uScaleX && !m.uniforms.uScaleX.__kwLocked)
+                                    m.uniforms.uScaleX.value = window.shortScaleX;
+                                if (m.uniforms.uScaleY && !m.uniforms.uScaleY.__kwLocked)
+                                    m.uniforms.uScaleY.value = 1;
+                                m.needsUpdate = true;
+                            }
+                        } else if (!window.shortVideoActive &&
+                                   !window.act2VisualSequenceActive &&
+                                   !window.audioOnlyActive &&
+                                   !_act2UniformsLocked) {
+                            // Normal mode: ensure scale is 1 if it was left at Short scale
+                            const m = window._kwMat;
+                            if (m && m.uniforms && m.uniforms.uScaleX &&
+                                !m.uniforms.uScaleX.__kwLocked &&
+                                m.uniforms.uScaleX.value === window.shortScaleX) {
+                                m.uniforms.uScaleX.value = 1;
+                                m.uniforms.uScaleY.value = 1;
+                                m.needsUpdate = true;
+                            }
+                        }
+                    };
+                    return tv;
+                });
+            };
+            val.loadTV.isWrapped = true;
+            console.log('[WS Interceptor] KimerawareTV.loadTV wrapped.');
+        },
+        configurable: true
+    });
+
+    // ── WebSocket interception ────────────────────────────────────────────────
+    const _OrigWS = window.WebSocket;
     window.WebSocket = function(url, protocols) {
-        let modifiedUrl = url;
+        // Append clientId
+        let modUrl = url;
         try {
             let id = localStorage.getItem('kimeraware_client_id');
             if (!id) {
-                id = 'client_' + Math.random().toString(36).substring(2, 15) + '_' + Date.now();
+                id = 'client_' + Math.random().toString(36).slice(2) + '_' + Date.now();
                 localStorage.setItem('kimeraware_client_id', id);
             }
-            
-            let tempUrl = url;
-            let isWs = false;
-            let isWss = false;
-            if (url.startsWith('ws://')) {
-                tempUrl = url.replace('ws://', 'http://');
-                isWs = true;
-            } else if (url.startsWith('wss://')) {
-                tempUrl = url.replace('wss://', 'https://');
-                isWss = true;
-            }
-            
-            const urlObj = new URL(tempUrl, window.location.href);
-            urlObj.searchParams.set('clientId', id);
-            
-            // Check if testing mode is active (either path has /v2 or host is kimeraware.macrostasis.dev/v2)
-            if (window.location.pathname.includes('/v2')) {
-                urlObj.searchParams.set('testing', 'true');
-                console.log('[WebSocket Interceptor] Staging v2 client detected. Connecting with testing=true.');
-            }
-            
-            modifiedUrl = urlObj.toString();
-            
-            if (isWs) {
-                modifiedUrl = modifiedUrl.replace('http://', 'ws://');
-            } else if (isWss) {
-                modifiedUrl = modifiedUrl.replace('https://', 'wss://');
-            }
-        } catch(e) {
-            console.error('[WebSocket Interceptor] Failed to append clientId:', e);
-        }
+            const isWs = url.startsWith('ws://'), isWss = url.startsWith('wss://');
+            let tmp = url.replace(/^wss?:\/\//, isWss ? 'https://' : 'http://');
+            const u = new URL(tmp, location.href);
+            u.searchParams.set('clientId', id);
+            if (location.pathname.includes('/v2')) u.searchParams.set('testing', 'true');
+            modUrl = u.toString().replace(/^https?:\/\//, isWss ? 'wss://' : isWs ? 'ws://' : 'wss://');
+        } catch(e) { console.error('[WS] clientId error:', e); }
 
-        console.log('[WebSocket Interceptor] Intercepted WebSocket creation to:', modifiedUrl);
-        const ws = new OriginalWebSocket(modifiedUrl, protocols);
-        
+        const ws = new _OrigWS(modUrl, protocols);
         ws.addEventListener('open', () => {
-            console.log('[WebSocket Interceptor] WebSocket connected!');
-            window.wsConnected = true;
-            window.wsProgress = 100;
-            if (typeof window.updateOverallProgress === 'function') {
-                window.updateOverallProgress();
-            }
+            window.wsConnected = true; window.wsProgress = 100;
+            if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
         });
 
-        // Decryption logic for encrypted WebSocket messages
-        let Ae = null;
-        async function kt() {
-            if (Ae) return Ae;
-            const e = "75,87,95,65,82,71",
-                  n = new Uint8Array(e.split(",").map(Number)),
-                  t = new TextEncoder().encode("kimeraware-ws-2025"),
-                  i = await crypto.subtle.importKey("raw", n, {name: "HMAC", hash: "SHA-256"}, false, ["sign"]),
-                  d = await crypto.subtle.sign("HMAC", i, t);
-            return Ae = await crypto.subtle.importKey("raw", d, {name: "AES-GCM"}, false, ["decrypt"]), Ae;
+        // ── AES-GCM decrypt ───────────────────────────────────────────────────
+        let _ck = null;
+        async function _getKey() {
+            if (_ck) return _ck;
+            const seed   = new Uint8Array("75,87,95,65,82,71".split(',').map(Number));
+            const salt   = new TextEncoder().encode('kimeraware-ws-2025');
+            const hmac   = await crypto.subtle.importKey('raw', seed, {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+            const digest = await crypto.subtle.sign('HMAC', hmac, salt);
+            return _ck = await crypto.subtle.importKey('raw', digest, {name:'AES-GCM'}, false, ['decrypt']);
         }
-        
-        async function decryptMessage(e) {
+        async function decrypt(raw) {
             try {
-                const n = Uint8Array.from(atob(e), r => r.charCodeAt(0)),
-                      t = n.slice(0, 12),
-                      i = n.slice(12, 28),
-                      d = n.slice(28),
-                      a = new Uint8Array(d.length + 16);
-                a.set(d);
-                a.set(i, d.length);
-                const u = await kt(),
-                      s = await crypto.subtle.decrypt({name: "AES-GCM", iv: t}, u, a);
-                return JSON.parse(new TextDecoder().decode(s));
-            } catch(err) {
-                try { return JSON.parse(e); } catch { throw err; }
-            }
+                if ((typeof crypto === 'undefined' || !crypto.subtle) && typeof window !== 'undefined' && typeof window.decryptWsMessageFallback === 'function') {
+                    return window.decryptWsMessageFallback(raw);
+                }
+                const b   = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+                const iv  = b.slice(0,12), tag = b.slice(12,28), ct = b.slice(28);
+                const buf = new Uint8Array(ct.length + 16);
+                buf.set(ct); buf.set(tag, ct.length);
+                const pt  = await crypto.subtle.decrypt({name:'AES-GCM',iv}, await _getKey(), buf);
+                return JSON.parse(new TextDecoder().decode(pt));
+            } catch { try { return JSON.parse(raw); } catch(e) { throw e; } }
         }
 
-        // Helper to load image textures
-        let textureLoader = null;
-        function loadOverrideTexture(imgUrl, callback) {
-            if (!imgUrl) return;
-            if (!textureLoader) {
-                textureLoader = new THREE.TextureLoader();
-            }
-            textureLoader.load(imgUrl, (texture) => {
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.minFilter = THREE.LinearFilter;
-                texture.generateMipmaps = false;
-                texture.needsUpdate = true;
-                if (callback) {
-                    callback(texture);
-                } else {
-                    window.overrideTvTexture = texture;
-                    window.act2ImageTexture = texture;
+        // ── Texture loader ────────────────────────────────────────────────────
+        let _tl = null;
+        function loadTex(imgUrl, cb) {
+            if (!imgUrl) { cb && cb(null); return; }
+            let url = imgUrl;
+            if (imgUrl.startsWith('/assets/')) {
+                const h = location.hostname;
+                if (h !== 'localhost' && !h.includes('127.0.0.1') && !h.includes('macrostasis.dev')) {
+                    url = 'https://kimeraware.macrostasis.dev' + imgUrl;
                 }
-                console.log('[WebSocket Interceptor] Loaded override image texture:', imgUrl);
-            }, undefined, (err) => {
-                console.error('[WebSocket Interceptor] Failed to load override texture:', err);
-            });
+            }
+            if (!_tl) _tl = new THREE.TextureLoader();
+            _tl.setCrossOrigin('anonymous');
+            _tl.load(url, tex => {
+                tex.colorSpace = THREE.SRGBColorSpace;
+                tex.minFilter  = THREE.LinearFilter;
+                tex.generateMipmaps = false;
+                tex.needsUpdate = true;
+                console.log('[WS Interceptor] Texture ready:', url);
+                cb && cb(tex);
+            }, undefined, e => { console.error('[WS Interceptor] Texture fail:', url, e); cb && cb(null); });
         }
 
-        function handleAudioOnlyMessage(decrypted) {
-            if (decrypted.audioOnly) {
-                decrypted.mode = 'video'; // force video player to play stream
-                let imgUrl = decrypted.imageUrl || decrypted.imageData || decrypted.mainImageData;
-                if (!imgUrl && window.lastAppliedPreset) {
-                    imgUrl = window.lastAppliedPreset.mainImageData || window.lastAppliedPreset.imageData;
-                }
-                if (!imgUrl) {
-                    imgUrl = '/assets/padre_transparente.webp';
-                }
-                window.tvOverrideVolume = decrypted.videoVolume !== undefined ? decrypted.videoVolume : null;
-                
-                // Initialize overrideTvTexture synchronously to black to prevent any frame leak
-                window.overrideTvTexture = getBlackTexture();
-                window.act2ImageTexture = null;
-                
-                // Load the act2 image texture and store it
-                loadOverrideTexture(imgUrl, (texture) => {
-                    window.act2ImageTexture = texture;
-                    console.log('[WebSocket Interceptor] Loaded act2 override image texture:', imgUrl);
-                });
+        // ── Canvas-based image preprocessor (clamp dark pixels to true black) ──
+        function processImageAndClamp(imgUrl, threshold, cb) {
+            if (!imgUrl) { cb && cb(null); return; }
+            const resolvedUrl = _resolveAssetUrl(imgUrl);
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = function() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
 
-                window.audioOnlyOverrideUntil = Date.now() + (decrypted.duration || 60) * 1000;
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    const len = data.length;
+
+                    for (let i = 0; i < len; i += 4) {
+                        if (data[i] < threshold && data[i+1] < threshold && data[i+2] < threshold) {
+                            data[i]   = 0;
+                            data[i+1] = 0;
+                            data[i+2] = 0;
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+
+                    const tex = new THREE.CanvasTexture(canvas);
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    tex.minFilter = THREE.LinearFilter;
+                    tex.generateMipmaps = false;
+                    tex.needsUpdate = true;
+                    console.log('[WS Interceptor] Clamped texture ready (threshold=' + threshold + ')');
+                    cb && cb(tex);
+                } catch(e) {
+                    console.error('[WS Interceptor] Canvas clamp failed, fallback to normal:', e);
+                    loadTex(imgUrl, cb);
+                }
+            };
+            img.onerror = function(e) {
+                console.error('[WS Interceptor] Image load fail for clamping:', resolvedUrl, e);
+                cb && cb(null);
+            };
+            img.src = resolvedUrl;
+        }
+
+        // ── handleAudioOnly ───────────────────────────────────────────────────
+        // When audioOnly=true:
+        //   1. BLOCK the trigger_video from reaching TV bundle
+        //      (TV bundle stays in preset mode — no video mode, no VideoTexture, no leaks)
+        //   2. Start a separate <audio> element with the HLS/video URL
+        //   3. Preload the ACT2 image texture for later use
+        //
+        // When audioOnly=false (normal video or any clear): stop audio player, clear state.
+        function handleAudioOnly(dec) {
+            const isAO = dec.audioOnly === true || dec.audioOnly === 'true';
+            if (isAO) {
+                const volPct = dec.videoVolume != null ? dec.videoVolume : 90;
+                const dur    = parseFloat(dec.duration) || 60;
+                const origDur = parseFloat(dec.originalDuration) || dur;
+                const startElapsed = origDur - dur;
+
+                window.tvOverrideVolume        = volPct;
                 window.audioOnlyLocalStartTime = Date.now();
-                window.audioOnlyStartElapsed = (decrypted.originalDuration || 60) - (decrypted.duration || 60);
-                window.audioOnlyDuration = decrypted.duration || 60;
-                window.audioOnlyActive = true;
-                return true;
-            } else {
-                const isAudioOverrideActive = window.audioOnlyOverrideUntil && Date.now() < window.audioOnlyOverrideUntil;
-                if (!isAudioOverrideActive || decrypted.type === 'trigger_video') {
-                    window.overrideTvTexture = null;
-                    window.audioOnlyOverrideUntil = null;
-                    window.act2ImageTexture = null;
-                    window.defaultAct2BackgroundTexture = null;
-                    window.audioOnlyActive = false;
+                window.audioOnlyStartElapsed   = startElapsed;
+                window.audioOnlyDuration       = dur;
+                window.audioOnlyActive         = true;
+                window.act2VisualSequenceActive = false; // visual activates when act2 preset arrives
+                window.audioOnlyTimeline       = dec.timeline || {
+                    startFadeIn: 11.0,
+                    startPlateau: 13.0,
+                    startFadeOut: 50.0,
+                    startStatic: 55.0
+                };
+
+                // Start separate audio player
+                _startAudioPlayer(dec.videoUrl || '', volPct, startElapsed);
+
+                // Preload ACT2 image
+                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 0;
+                const imgUrl = dec.imageUrl || dec.imageData || dec.mainImageData;
+                window.lastAct2ImageUrl = imgUrl || null;
+                if (imgUrl && !window.act2ImageTexture) {
+                    const threshold = window.act2ClampThreshold || 0;
+                    if (threshold > 0) {
+                        processImageAndClamp(imgUrl, threshold, tex => {
+                            window.act2ImageTexture = tex;
+                            console.log('[WS Interceptor] ACT2 image preloaded (clamped).');
+                        });
+                    } else {
+                        loadTex(imgUrl, tex => {
+                            window.act2ImageTexture = tex;
+                            console.log('[WS Interceptor] ACT2 image preloaded.');
+                        });
+                    }
                 }
+
+                console.log('[WS Interceptor] audioOnly ON — blocking TV bundle, starting audio player. dur:', dur, 'img:', imgUrl);
+
+                // CRITICAL FIX: If act2 preset is already active (e.g. late connection), activate the visual sequence immediately!
+                if (window.lastAppliedPreset && window.lastAppliedPreset.presetId === 'act2') {
+                    activateAct2Visual(imgUrl || window.lastAppliedPreset.mainImageData);
+                }
+
+                // Return false so wrapListener sends the ORIGINAL event — but we BLOCK it in processMsg
+                return false;
+            } else {
+                // Normal video or clear: stop audio player, restore full TV bundle control
+                _stopAudioPlayer();
+                window.audioOnlyActive          = false;
+                window.act2VisualSequenceActive = false;
+                window.overrideTvTexture        = null;
+                window.act2ImageTexture         = null;
+                window.lastAct2ImageUrl         = null;
+                window.act2ClampThreshold        = 0;
                 return false;
             }
         }
 
-        function handleResetMessage() {
-            window.overrideTvTexture = null;
-            window.audioOnlyOverrideUntil = null;
-            window.act2ImageTexture = null;
-            window.defaultAct2BackgroundTexture = null;
-            window.audioOnlyActive = false;
+        // ── activateAct2Visual ────────────────────────────────────────────────
+        // Called when presetId=act2 arrives AND audioOnly is active.
+        // Starts the per-frame timeline that controls overrideTvTexture.
+        function activateAct2Visual(imgUrl) {
+            if (!window.audioOnlyActive) {
+                console.warn('[WS Interceptor] activateAct2Visual: audioOnly not active, skip');
+                return;
+            }
+            window.act2VisualSequenceActive = true;
+            window.overrideTvTexture = getBlackTex(); // default: black until t=11s
+
+            // Use preloaded texture if ready; load if not
+            if (window.act2ImageTexture) {
+                console.log('[WS Interceptor] ACT2 image already preloaded ✓');
+            } else if (imgUrl) {
+                const threshold = window.act2ClampThreshold || 0;
+                if (threshold > 0) {
+                    processImageAndClamp(imgUrl, threshold, tex => {
+                        window.act2ImageTexture = tex;
+                        console.log('[WS Interceptor] ACT2 image loaded (late, clamped).');
+                    });
+                } else {
+                    loadTex(imgUrl, tex => {
+                        window.act2ImageTexture = tex;
+                        console.log('[WS Interceptor] ACT2 image loaded (late load).');
+                    });
+                }
+            }
+            console.log('[WS Interceptor] ACT2 visual sequence ACTIVE. Image ready:', !!window.act2ImageTexture);
         }
 
-        // Create Proxy to intercept event listeners and message handler
-        const proxy = new Proxy(ws, {
-            get(target, prop, receiver) {
-                if (prop === 'addEventListener') {
-                    return function(type, listener, options) {
-                        if (type === 'message') {
-                            const wrappedListener = async function(event) {
-                                try {
-                                    const decrypted = await decryptMessage(event.data);
-                                    let modified = false;
-                                    
-                                    if (decrypted && (decrypted.type === 'trigger_video' || decrypted.type === 'apply_preset')) {
-                                        if (decrypted.type === 'apply_preset') {
-                                            window.lastAppliedPreset = decrypted;
-                                        }
-                                        modified = handleAudioOnlyMessage(decrypted);
-                                    } else if (decrypted && decrypted.type === 'reset') {
-                                        handleResetMessage();
-                                    }
-                                    
-                                    // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
-                                    if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
-                                        console.log('[WebSocket Interceptor] Blocking apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
-                                        return;
-                                    }
-                                    
-                                    if (modified) {
-                                        const newEvent = new MessageEvent('message', {
-                                            data: JSON.stringify(decrypted),
-                                            origin: event.origin,
-                                            lastEventId: event.lastEventId,
-                                            source: event.source,
-                                            ports: event.ports
-                                        });
-                                        return listener.call(this, newEvent);
-                                    }
-                                } catch (e) {
-                                    console.error('[WebSocket Interceptor] Error wrapping addEventListener message event:', e);
-                                }
-                                return listener.call(this, event);
-                            };
-                            if (!target._wrappedListeners) target._wrappedListeners = new Map();
-                            target._wrappedListeners.set(listener, wrappedListener);
-                            return target.addEventListener(type, wrappedListener, options);
-                        }
-                        return target.addEventListener(type, listener, options);
-                    };
-                }
-                
-                if (prop === 'removeEventListener') {
-                    return function(type, listener, options) {
-                        if (type === 'message' && target._wrappedListeners && target._wrappedListeners.has(listener)) {
-                            const wrapped = target._wrappedListeners.get(listener);
-                            target._wrappedListeners.delete(listener);
-                            return target.removeEventListener(type, wrapped, options);
-                        }
-                        return target.removeEventListener(type, listener, options);
-                    };
-                }
- 
-                if (prop === 'onmessage') {
-                    return target.onmessage;
-                }
- 
-                const value = target[prop];
-                return typeof value === 'function' ? value.bind(target) : value;
-            },
-            set(target, prop, value, receiver) {
-                if (prop === 'onmessage') {
-                    if (value) {
-                        const wrappedListener = async function(event) {
-                            try {
-                                const decrypted = await decryptMessage(event.data);
-                                let modified = false;
-                                
-                                if (decrypted && (decrypted.type === 'trigger_video' || decrypted.type === 'apply_preset')) {
-                                    if (decrypted.type === 'apply_preset') {
-                                        window.lastAppliedPreset = decrypted;
-                                    }
-                                    modified = handleAudioOnlyMessage(decrypted);
-                                } else if (decrypted && decrypted.type === 'reset') {
-                                    handleResetMessage();
-                                }
-                                
-                                // DEFER/BLOCK apply_preset message while audioOnlyActive is true to prevent TV bundle from aborting the preloading video player
-                                if (decrypted && decrypted.type === 'apply_preset' && window.audioOnlyActive) {
-                                    console.log('[WebSocket Interceptor] Blocking onmessage apply_preset from TV bundle handler while audioOnlyActive is true:', decrypted);
-                                    return;
-                                }
-                                
-                                if (modified) {
-                                    const newEvent = new MessageEvent('message', {
-                                        data: JSON.stringify(decrypted),
-                                        origin: event.origin,
-                                        lastEventId: event.lastEventId,
-                                        source: event.source,
-                                        ports: event.ports
-                                    });
-                                    return value.call(this, newEvent);
-                                }
-                            } catch (e) {
-                                console.error('[WebSocket Interceptor] Error wrapping onmessage:', e);
-                            }
-                            return value.call(this, event);
-                        };
-                        target[prop] = wrappedListener;
-                        return true;
+        // ── processMsg ───────────────────────────────────────────────────────
+        // Returns { block: bool, modified: bool }
+        function processMsg(dec) {
+            let block = false, modified = false;
+            if (!dec) return { block, modified };
+
+            if (dec.type === 'trigger_video' || dec.type === 'apply_preset') {
+                if (dec.type === 'apply_preset') window.lastAppliedPreset = dec;
+
+                // BLOCK audioOnly trigger_video — TV bundle must NOT enter video mode
+                if (dec.type === 'trigger_video' && (dec.audioOnly === true || dec.audioOnly === 'true')) {
+                    handleAudioOnly(dec);
+                    block = true;
+                    console.log('[WS Interceptor] Blocked audioOnly trigger_video from TV bundle.');
+                } else if (dec.type === 'trigger_video') {
+                    handleAudioOnly(dec);
+                    // Detect YouTube Short → activate portrait pillarbox
+                    const newIsShort = dec.isShort === true || dec.isShort === 'true' ||
+                        !!(dec.videoUrl && dec.videoUrl.match(/\/shorts\/[a-zA-Z0-9_-]{11}/));
+                    if (newIsShort !== window.shortVideoActive) {
+                        window.shortVideoActive = newIsShort;
+                        console.log(`[WS Interceptor] Short portrait mode: ${newIsShort ? 'ON (uScaleX=' + window.shortScaleX + ')' : 'OFF'}`);
                     }
+
+                    // Server now sends apply_preset BEFORE trigger_video for non-audioOnly,
+                    // so the bundle runs Te() first (storing preset in V), then starts the video.
+                    // No interception needed here — the ordering fix on the server prevents the race.
                 }
-                target[prop] = value;
-                return true;
+
+                // Let apply_preset reach the TV bundle. ACT presets must update the TV
+                // state so the CRT material and ACT visuals stay in sync; only the
+                // audioOnly trigger_video is blocked to prevent VideoTexture creation.
+
+                // SEÑAL PENDIENTE defense: if act2 preset arrives and we're not yet in
+                // audioOnly mode (race condition: override hasn't arrived yet), immediately
+                // force a black texture so the TV bundle never renders SEÑAL PENDIENTE.
+                // The correct visual state will activate when audioOnly override arrives next.
+                if (dec.type === 'apply_preset' && dec.presetId === 'act2' && !window.audioOnlyActive) {
+                    window.overrideTvTexture = getBlackTex();
+                    console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
+                }
+
+            } else if (dec.type === 'reset') {
+                _stopAudioPlayer();
+                window.audioOnlyActive          = false;
+                window.act2VisualSequenceActive = false;
+                window.overrideTvTexture        = null;
+                window.act2ImageTexture         = null;
+                window.lastAct2ImageUrl         = null;
+                window.act2ClampThreshold        = 0;
+                window.actCurrentlyActive       = false;
+                window.actPausedVideoInfo       = null;
+                window.shortVideoActive         = false;
+            }
+            return { block, modified };
+        }
+
+        // ── Generic ACT pause/resume ──────────────────────────────────────────
+        function onActOn(id) {
+            // Allow re-entry if it's a different ACT (unlikely but safe)
+            if (window.actCurrentlyActive && window.actActiveId === id) return;
+            window.actCurrentlyActive = true; window.actActiveId = id;
+            const v = window.tvVideoElement;
+            // Capture video state: track even if paused (auto-play may have been blocked)
+            if (v && v.src) {
+                const live = !isFinite(v.duration) || v.duration === Infinity || v.duration === 0;
+                const ct = (v.readyState >= 1 && isFinite(v.currentTime)) ? v.currentTime : 0;
+                window.actPausedVideoInfo = { url: v.src, t: ct, live, at: Date.now(), vol: v.volume };
+                if (!v.paused) {
+                    try { v.pause(); } catch(e) {}
+                    console.log(`[WS Interceptor] ACT${id}: paused video at ${ct.toFixed(1)}s (live=${live})`);
+                } else {
+                    console.log(`[WS Interceptor] ACT${id}: video already paused at ${ct.toFixed(1)}s (saved state)`);
+                }
+            }
+        }
+        function onActOff(id) {
+            // Accept any id if actCurrentlyActive — handles stale id mismatches
+            if (!window.actCurrentlyActive) return;
+            window.actCurrentlyActive = false; window.actActiveId = null;
+            const i = window.actPausedVideoInfo; window.actPausedVideoInfo = null;
+            if (!i) return;
+            const v = window.tvVideoElement; if (!v) return;
+            // Restore volume
+            try { v.volume = i.vol; } catch(e) {}
+            if (i.live) {
+                // Live: sync to live edge
+                try {
+                    if (v.seekable && v.seekable.length > 0) {
+                        const edge = v.seekable.end(v.seekable.length - 1);
+                        if (isFinite(edge) && edge > 0) v.currentTime = Math.max(0, edge - 1.5);
+                    }
+                } catch(e) {}
+                if (v.paused) v.play().catch(()=>{});
+                console.log(`[WS Interceptor] ACT${id}: live stream resynced to live edge.`);
+            } else {
+                // VOD: resume at exact captured timestamp
+                try {
+                    const resumeAt = Math.min(isFinite(v.duration) && v.duration > 0 ? v.duration - 0.5 : Infinity, i.t);
+                    v.currentTime = resumeAt;
+                } catch(e) {}
+                if (v.paused) v.play().catch(()=>{});
+                console.log(`[WS Interceptor] ACT${id}: VOD resumed at ${i.t.toFixed(1)}s.`);
+            }
+        }
+
+        // ── Wrap a listener ───────────────────────────────────────────────────
+        function wrap(listener) {
+            return async function(event) {
+                try {
+                    const dec = await decrypt(event.data);
+                    const { block } = processMsg(dec);
+                    if (block) return;
+                } catch(e) { console.error('[WS Interceptor]', e); }
+                return listener.call(this, event);
+            };
+        }
+
+        // ── Proxy ─────────────────────────────────────────────────────────────
+        const proxy = new Proxy(ws, {
+            get(t, p) {
+                if (p === 'addEventListener') {
+                    return (type, fn, opts) => {
+                        if (type === 'message') {
+                            const w = wrap(fn);
+                            if (!t._wl) t._wl = new Map();
+                            t._wl.set(fn, w);
+                            return t.addEventListener(type, w, opts);
+                        }
+                        return t.addEventListener(type, fn, opts);
+                    };
+                }
+                if (p === 'removeEventListener') {
+                    return (type, fn, opts) => {
+                        if (type === 'message' && t._wl?.has(fn)) {
+                            const w = t._wl.get(fn); t._wl.delete(fn);
+                            return t.removeEventListener(type, w, opts);
+                        }
+                        return t.removeEventListener(type, fn, opts);
+                    };
+                }
+                if (p === 'onmessage') return t.onmessage;
+                const v = t[p]; return typeof v === 'function' ? v.bind(t) : v;
+            },
+            set(t, p, v) {
+                if (p === 'onmessage' && v) { t[p] = wrap(v); return true; }
+                t[p] = v; return true;
             }
         });
 
-        // Intercept WS messages to trigger Act 1 & Act 2 sequence states in the proxy
+        // ── Raw listener: ACT state machine ──────────────────────────────────
         ws.addEventListener('message', async (event) => {
             try {
-                let data;
-                const rawData = event.data;
-                if (typeof rawData === 'string' && rawData.startsWith('{')) {
-                    data = JSON.parse(rawData);
-                } else if (typeof rawData === 'string') {
-                    data = await decryptMessage(rawData);
+                let d;
+                if (typeof event.data === 'string' && event.data.startsWith('{'))
+                    d = JSON.parse(event.data);
+                else d = await decrypt(event.data);
+                if (!d) return;
+
+                // ── Dynamic tagline updates ──
+                if (d.tagline1 !== undefined) {
+                    const el = document.getElementById('tagline-distorsiona');
+                    if (el) el.innerText = d.tagline1;
                 }
-                
-                if (data) {
-                    // ── ACT1 detection ──────────────────────────────────────
-                    if (data.type === 'apply_preset' || data.type === 'trigger_video') {
-                        const isAct1 = data.presetId === 'act1' || 
-                                       data.act1 === true ||
-                                       (data.text && data.text.toLowerCase().includes('act1')) ||
-                                       (data.videoUrl && data.videoUrl.toLowerCase().includes('act1'));
-                        
-                        if (isAct1) {
-                            if (typeof window.setAct1 === 'function') window.setAct1(true);
-                            if (typeof window.setAct2 === 'function') window.setAct2(false); // mutual exclusion
-                        } else if (data.type === 'apply_preset' && data.presetId !== 'act1') {
-                            if (typeof window.setAct1 === 'function') window.setAct1(false);
+                if (d.tagline2 !== undefined) {
+                    const el = document.getElementById('tagline-comienza');
+                    if (el) el.innerText = d.tagline2;
+                }
+
+                if (d.type === 'apply_preset' || d.type === 'trigger_video') {
+                    const pid = d.presetId || '';
+                    const m = pid.match(/^act(\d+)$/i);
+                    if (m) onActOn(parseInt(m[1]));
+                    else if (d.type === 'apply_preset' && window.actCurrentlyActive) onActOff(window.actActiveId);
+
+                    if (pid === 'act1' || d.act1 === true) {
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(true);
+                        } else {
+                            window.pendingAct1State = { active: true };
                         }
-
-                        // ── ACT2 detection ──────────────────────────────────
-                        const isAct2 = data.presetId === 'act2' ||
-                                       data.act2 === true ||
-                                       (data.text && data.text.toLowerCase().includes('act2')) ||
-                                       (data.videoUrl && data.videoUrl.toLowerCase().includes('act2'));
-
-                        if (isAct2) {
-                            if (typeof window.setAct2 === 'function') {
-                                const elapsed = data.elapsedSeconds || 0;
-                                window.setAct2(true, elapsed);
-                            }
-                            if (typeof window.setAct1 === 'function') window.setAct1(false); // mutual exclusion
-                        } else if (data.type === 'apply_preset' && data.presetId !== 'act2') {
-                            if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(false);
+                        } else {
+                            window.pendingAct2State = { active: false };
                         }
-
-                    } else if (data.type === 'reset') {
-                        if (typeof window.setAct1 === 'function') window.setAct1(false);
-                        if (typeof window.setAct2 === 'function') window.setAct2(false);
+                    } else if (d.type === 'apply_preset' && pid !== 'act1') {
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(false);
+                        } else {
+                            window.pendingAct1State = { active: false };
+                        }
                     }
+
+                    if (pid === 'act2' || d.act2 === true) {
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(true, d.elapsedSeconds || 0);
+                        } else {
+                            window.pendingAct2State = { active: true, elapsedSeconds: d.elapsedSeconds || 0 };
+                        }
+                        if (typeof window.setAct1 === 'function') {
+                            window.setAct1(false);
+                        } else {
+                            window.pendingAct1State = { active: false };
+                        }
+                        // Activate visual sequence if audioOnly is already running
+                        if (window.audioOnlyActive && !window.act2VisualSequenceActive) {
+                            activateAct2Visual(d.mainImageData || window.lastAct2ImageUrl);
+                        }
+                    } else if (d.type === 'apply_preset' && pid !== 'act2') {
+                        if (typeof window.setAct2 === 'function') {
+                            window.setAct2(false);
+                        } else {
+                            window.pendingAct2State = { active: false };
+                        }
+                    }
+
+                } else if (d.type === 'reset') {
+                    if (typeof window.setAct1 === 'function') {
+                        window.setAct1(false);
+                    } else {
+                        window.pendingAct1State = { active: false };
+                    }
+                    if (typeof window.setAct2 === 'function') {
+                        window.setAct2(false);
+                    } else {
+                        window.pendingAct2State = { active: false };
+                    }
+                    window.lastAppliedPreset = null;
+                    if (window.actCurrentlyActive) onActOff(window.actActiveId);
                 }
-            } catch(e) {
-                // Ignore errors
-            }
+            } catch(e) { /* ignore */ }
         });
 
         return proxy;
     };
-    // Copy static properties of WebSocket
-    Object.getOwnPropertyNames(OriginalWebSocket).forEach(prop => {
-        if (OriginalWebSocket.hasOwnProperty(prop)) {
-            try {
-                window.WebSocket[prop] = OriginalWebSocket[prop];
-            } catch(e) {}
-        }
+
+    Object.getOwnPropertyNames(_OrigWS).forEach(p => {
+        try { window.WebSocket[p] = _OrigWS[p]; } catch(e) {}
     });
-    window.WebSocket.prototype = OriginalWebSocket.prototype;
-    
-    // Timeout to mark WS as loaded if connection takes too long
+    window.WebSocket.prototype = _OrigWS.prototype;
+
     setTimeout(() => {
         if (!window.wsConnected) {
-            console.warn('[Loader] WebSocket connection timed out, marking as loaded to proceed...');
             window.wsProgress = 100;
-            if (typeof window.updateOverallProgress === 'function') {
-                window.updateOverallProgress();
-            }
+            if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
         }
     }, 5000);
 })();
