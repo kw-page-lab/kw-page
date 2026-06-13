@@ -243,6 +243,32 @@
         return el;
     };
 
+    // ── Protect video element from out-of-bounds HLS seeking (Sync Shield) ──
+    const _origDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+    if (_origDescriptor && _origDescriptor.set) {
+        Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+            get: _origDescriptor.get,
+            set: function(val) {
+                if (this === window.tvVideoElement) {
+                    let maxSeekable = 0;
+                    try {
+                        if (this.seekable && this.seekable.length > 0) {
+                            maxSeekable = this.seekable.end(this.seekable.length - 1);
+                        }
+                    } catch (e) {}
+
+                    if (maxSeekable > 0 && val > maxSeekable + 2.0) {
+                        console.log('[Sync Shield] Swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (max seekable: ' + maxSeekable.toFixed(1) + 's)');
+                        return;
+                    }
+                }
+                return _origDescriptor.set.call(this, val);
+            },
+            configurable: true,
+            enumerable: true
+        });
+    }
+
     // ── KimerawareTV.loadTV wrapper ───────────────────────────────────────────
     // Purpose: install uTexture getter so ACT2 can override what shows on the CRT.
     // Note: when audioOnly is active, TV bundle is in PRESET mode (not video mode)
