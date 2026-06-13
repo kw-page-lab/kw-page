@@ -2,6 +2,27 @@
 // Strategy: audioOnly uses a SEPARATE <audio> element completely outside TV bundle.
 // TV bundle never enters video mode during audioOnly → zero texture leaks possible.
 (function() {
+    // ── Client-side debug logging to server ──────────────────────────────────
+    function sendDebugLog(type, msg) {
+        fetch('/log_debug', {
+            method: 'POST',
+            body: JSON.stringify({ type, msg, timestamp: Date.now(), url: location.href })
+        }).catch(() => {});
+    }
+    const _origError = console.error;
+    console.error = function(...args) {
+        _origError.apply(console, args);
+        sendDebugLog('ERROR', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    };
+    const _origWarn = console.warn;
+    console.warn = function(...args) {
+        _origWarn.apply(console, args);
+        sendDebugLog('WARN', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    };
+    window.addEventListener('error', function(e) {
+        sendDebugLog('UNCAUGHT', e.message + ' at ' + e.filename + ':' + e.lineno);
+    });
+
     window.wsConnected = false;
     window.wsProgress  = 0;
 
