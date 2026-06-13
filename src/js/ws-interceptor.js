@@ -452,6 +452,7 @@
         } catch(e) { console.error('[WS] clientId error:', e); }
 
         const ws = new _OrigWS(modUrl, protocols);
+        let wsEventChain = Promise.resolve();
         ws.addEventListener('open', () => {
             window.wsConnected = true; window.wsProgress = 100;
             if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
@@ -479,6 +480,27 @@
                 const pt  = await crypto.subtle.decrypt({name:'AES-GCM',iv}, await _getKey(), buf);
                 return JSON.parse(new TextDecoder().decode(pt));
             } catch { try { return JSON.parse(raw); } catch(e) { throw e; } }
+        }
+
+        async function getDecryptedEventData(event) {
+            if (event.__decryptedData !== undefined) {
+                return event.__decryptedData;
+            }
+            try {
+                const dec = await decrypt(event.data);
+                event.__decryptedData = dec;
+                if (dec) {
+                    const { block } = processMsg(dec);
+                    event.__blocked = block;
+                } else {
+                    event.__blocked = false;
+                }
+            } catch(e) {
+                event.__decryptedData = null;
+                event.__blocked = false;
+                console.error('[WS Interceptor] Decryption failed:', e);
+            }
+            return event.__decryptedData;
         }
 
         // ── Texture loader ────────────────────────────────────────────────────
@@ -583,7 +605,7 @@
                 _startAudioPlayer(dec.videoUrl || '', volPct, startElapsed);
 
                 // Preload ACT2 image
-                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 0;
+                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 8;
                 const imgUrl = dec.imageUrl || dec.imageData || dec.mainImageData;
                 window.lastAct2ImageUrl = imgUrl || null;
                 if (imgUrl && !window.act2ImageTexture) {
@@ -762,13 +784,26 @@
 
         // ── Wrap a listener ───────────────────────────────────────────────────
         function wrap(listener) {
-            return async function(event) {
-                try {
-                    const dec = await decrypt(event.data);
-                    const { block } = processMsg(dec);
-                    if (block) return;
-                } catch(e) { console.error('[WS Interceptor]', e); }
-                return listener.call(this, event);
+            return function(event) {
+                wsEventChain = wsEventChain.then(async () => {
+                    try {
+                        await getDecryptedEventData(event);
+                        if (event.__blocked) return;
+                        listener.call(this, event);
+                    } catch(e) { console.error('[WS Interceptor] Error in wrapped listener:', e); }
+                });
+            };
+        }
+
+        // ── Wrap the raw state machine listener to preserve ordering without blocking ──
+        function wrapRaw(listener) {
+            return function(event) {
+                wsEventChain = wsEventChain.then(async () => {
+                    try {
+                        await getDecryptedEventData(event);
+                        await listener(event);
+                    } catch(e) { console.error('[WS Interceptor] Error in raw listener:', e); }
+                });
             };
         }
 
@@ -805,12 +840,9 @@
         });
 
         // ── Raw listener: ACT state machine ──────────────────────────────────
-        ws.addEventListener('message', async (event) => {
+        ws.addEventListener('message', wrapRaw(async (event) => {
             try {
-                let d;
-                if (typeof event.data === 'string' && event.data.startsWith('{'))
-                    d = JSON.parse(event.data);
-                else d = await decrypt(event.data);
+                const d = event.__decryptedData;
                 if (!d) return;
 
                 // ── Dynamic tagline updates ──
