@@ -30,14 +30,9 @@ function createInteriorLights() {
 // Dynamically update intensity of interior lights and white letter emissive values
 function updateInteriorLights() {
     const baseIntensity = params.interiorLight ? 3.5 : 0.0;
-    let intensity = baseIntensity;
-    if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
-        // ACT1: lights go fully off
-        intensity = THREE.MathUtils.lerp(baseIntensity, 0.0, window.act1Factor);
-    } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
-        // ACT2: lights dim to ~30% of normal (eerie residual glow)
-        intensity = THREE.MathUtils.lerp(baseIntensity, baseIntensity * 0.3, window.act2Factor);
-    }
+    const intensity = (typeof window.act1Factor !== 'undefined')
+        ? THREE.MathUtils.lerp(baseIntensity, 0.0, window.act1Factor)
+        : baseIntensity;
         
     interiorLights.forEach(light => {
         light.intensity = intensity;
