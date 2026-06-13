@@ -16,10 +16,7 @@
     window.act2ImageTexture         = null;
     window.lastAct2ImageUrl         = null;
 
-    // Video override race condition protection
-    window.videoOverrideActive      = false;
-    window.videoOverridePlaying     = false;
-    window.pendingPresetMsg         = null;
+    // (video override race protection removed — server now sends apply_preset before trigger_video)
 
     // YouTube Shorts portrait pillarbox
     // uScaleX > 1 = pillarboxed (content narrower than full screen)
@@ -598,9 +595,6 @@
                 window.act2ImageTexture         = null;
                 window.lastAct2ImageUrl         = null;
                 window.act2ClampThreshold        = 0;
-                window.videoOverrideActive      = false;
-                window.videoOverridePlaying     = false;
-                window.pendingPresetMsg         = null;
                 return false;
             }
         }
@@ -660,54 +654,9 @@
                         console.log(`[WS Interceptor] Short portrait mode: ${newIsShort ? 'ON (uScaleX=' + window.shortScaleX + ')' : 'OFF'}`);
                     }
 
-                    const isAO = dec.audioOnly === true || dec.audioOnly === 'true';
-                    if (!isAO) {
-                        window.videoOverrideActive = true;
-                        window.videoOverridePlaying = false;
-                        window.pendingPresetMsg = null;
-
-                        // Poll for the video element (created async by TV bundle after processing trigger_video).
-                        // CRITICAL: when 'playing' fires, the TV bundle's own playing listener (which sets U=true)
-                        // may not have run yet — we must wait a tick before flushing so U=true when Te() runs,
-                        // otherwise Te() sees U=false and calls tt(null) which destroys the HLS player.
-                        let _pollAttempts = 0;
-                        const _maxPollMs = 8000;
-                        const _pollInterval = 150;
-                        const _pollTimer = setInterval(() => {
-                            _pollAttempts++;
-                            const v = window.tvVideoElement;
-                            const elapsed = _pollAttempts * _pollInterval;
-
-                            if (v && !v._kwPlayListener) {
-                                // Element found — attach one-time listeners
-                                const _done = (reason) => {
-                                    if (window.videoOverridePlaying) return;
-                                    console.log('[WS Interceptor] Video ' + reason + ' → scheduling preset flush in 300ms (waiting for U=true).');
-                                    window.videoOverridePlaying = true;
-                                    clearInterval(_pollTimer);
-                                    v.removeEventListener('playing', v._kwPlayListener);
-                                    v.removeEventListener('error',   v._kwErrListener);
-                                    delete v._kwPlayListener;
-                                    delete v._kwErrListener;
-                                    // Delay so bundle's own 'playing' handler sets U=true first
-                                    setTimeout(flushPendingPresets, 300);
-                                };
-                                v._kwPlayListener = () => _done('playing');
-                                v._kwErrListener  = () => _done('error');
-                                v.addEventListener('playing', v._kwPlayListener);
-                                v.addEventListener('error',   v._kwErrListener);
-                                console.log('[WS Interceptor] Video element found, listening for playing/error.');
-                            }
-
-                            // Hard timeout — flush regardless so page doesn't get stuck
-                            if (elapsed >= _maxPollMs && !window.videoOverridePlaying) {
-                                console.log('[WS Interceptor] Video override hard timeout — flushing preset in 300ms.');
-                                window.videoOverridePlaying = true;
-                                clearInterval(_pollTimer);
-                                setTimeout(flushPendingPresets, 300);
-                            }
-                        }, _pollInterval);
-                    }
+                    // Server now sends apply_preset BEFORE trigger_video for non-audioOnly,
+                    // so the bundle runs Te() first (storing preset in V), then starts the video.
+                    // No interception needed here — the ordering fix on the server prevents the race.
                 }
 
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
@@ -733,10 +682,7 @@
                 window.act2ClampThreshold        = 0;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
-                window.shortVideoActive         = false; // clear Short portrait mode on reset
-                window.videoOverrideActive      = false;
-                window.videoOverridePlaying     = false;
-                window.pendingPresetMsg         = null;
+                window.shortVideoActive         = false;
             }
             return { block, modified };
         }
@@ -790,35 +736,11 @@
             }
         }
 
-        // Flush stored preset: re-create a synthetic MessageEvent using the raw encrypted data
-        // stored alongside the decoded payload. This avoids the stale MessageEvent problem.
-        function flushPendingPresets() {
-            if (!window.pendingPresetMsg) return;
-            console.log('[WS Interceptor] Flushing pending preset payload to TV bundle.');
-            const { decoded, rawData, listener, ctx } = window.pendingPresetMsg;
-            window.pendingPresetMsg = null;
-            try {
-                // Re-fire via the original listener using a fresh synthetic MessageEvent
-                // so the TV bundle processes it normally (including setting V for later restore).
-                const syntheticEvent = new MessageEvent('message', { data: rawData });
-                listener.call(ctx, syntheticEvent);
-            } catch(e) { console.error('[WS Interceptor] Failed to flush pending preset:', e); }
-        }
-
         // ── Wrap a listener ───────────────────────────────────────────────────
         function wrap(listener) {
             return async function(event) {
                 try {
                     const dec = await decrypt(event.data);
-
-                    // Delay apply_preset if video override is loading but not yet playing.
-                    // Store rawData + listener so flushPendingPresets can replay it correctly.
-                    if (dec && dec.type === 'apply_preset' && window.videoOverrideActive && !window.videoOverridePlaying) {
-                        console.log('[WS Interceptor] Queuing apply_preset until video override starts playing.');
-                        window.pendingPresetMsg = { decoded: dec, rawData: event.data, listener, ctx: this };
-                        return;
-                    }
-
                     const { block } = processMsg(dec);
                     if (block) return;
                 } catch(e) { console.error('[WS Interceptor]', e); }
