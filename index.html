@@ -3,7 +3,9 @@
 <head>
     <script>
         (function() {
-            if (window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') {
+            if ((window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') &&
+                !window.location.search.includes('debug=true') &&
+                localStorage.getItem('kimeraware_debug') !== 'true') {
                 const noop = function() {};
                 console.log = noop;
                 console.warn = noop;
