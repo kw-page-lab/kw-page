@@ -666,35 +666,44 @@
                         window.videoOverridePlaying = false;
                         window.pendingPresetMsg = null;
 
-                        setTimeout(() => {
+                        // Poll for the video element (created async by TV bundle after processing trigger_video)
+                        // Once found, wait for 'playing' or 'error' then flush the pending preset payload.
+                        let _pollAttempts = 0;
+                        const _maxPollMs = 8000;
+                        const _pollInterval = 150;
+                        const _pollTimer = setInterval(() => {
+                            _pollAttempts++;
                             const v = window.tvVideoElement;
-                            if (v) {
-                                const onPlaying = () => {
-                                    console.log('[WS Interceptor] TV video playing -> flushing presets.');
-                                    window.videoOverridePlaying = true;
-                                    flushPendingPresets();
-                                    v.removeEventListener('playing', onPlaying);
-                                    v.removeEventListener('error', onError);
-                                };
-                                const onError = () => {
-                                    console.log('[WS Interceptor] TV video error -> flushing presets.');
-                                    window.videoOverridePlaying = true;
-                                    flushPendingPresets();
-                                    v.removeEventListener('playing', onPlaying);
-                                    v.removeEventListener('error', onError);
-                                };
-                                v.addEventListener('playing', onPlaying);
-                                v.addEventListener('error', onError);
-                            }
-                        }, 100);
+                            const elapsed = _pollAttempts * _pollInterval;
 
-                        setTimeout(() => {
-                            if (!window.videoOverridePlaying) {
-                                console.log('[WS Interceptor] Video override playing safeguard fired.');
+                            if (v && !v._kwPlayListener) {
+                                // Element found — attach one-time listeners
+                                const _done = (reason) => {
+                                    if (window.videoOverridePlaying) return;
+                                    console.log('[WS Interceptor] Video ' + reason + ' → flushing pending preset.');
+                                    window.videoOverridePlaying = true;
+                                    clearInterval(_pollTimer);
+                                    flushPendingPresets();
+                                    v.removeEventListener('playing', v._kwPlayListener);
+                                    v.removeEventListener('error',   v._kwErrListener);
+                                    delete v._kwPlayListener;
+                                    delete v._kwErrListener;
+                                };
+                                v._kwPlayListener = () => _done('playing');
+                                v._kwErrListener  = () => _done('error');
+                                v.addEventListener('playing', v._kwPlayListener);
+                                v.addEventListener('error',   v._kwErrListener);
+                                console.log('[WS Interceptor] Video element found, listening for playing/error.');
+                            }
+
+                            // Hard timeout — flush regardless so page doesn't get stuck
+                            if (elapsed >= _maxPollMs && !window.videoOverridePlaying) {
+                                console.log('[WS Interceptor] Video override hard timeout — flushing preset.');
                                 window.videoOverridePlaying = true;
+                                clearInterval(_pollTimer);
                                 flushPendingPresets();
                             }
-                        }, 6000);
+                        }, _pollInterval);
                     }
                 }
 
@@ -778,15 +787,19 @@
             }
         }
 
+        // Flush stored preset: re-create a synthetic MessageEvent using the raw encrypted data
+        // stored alongside the decoded payload. This avoids the stale MessageEvent problem.
         function flushPendingPresets() {
-            if (window.pendingPresetMsg) {
-                console.log('[WS Interceptor] Flushing pending preset message to TV bundle.');
-                const { listener, event, context } = window.pendingPresetMsg;
-                window.pendingPresetMsg = null;
-                try {
-                    listener.call(context, event);
-                } catch(e) { console.error('[WS Interceptor] Failed to flush pending preset:', e); }
-            }
+            if (!window.pendingPresetMsg) return;
+            console.log('[WS Interceptor] Flushing pending preset payload to TV bundle.');
+            const { decoded, rawData, listener, ctx } = window.pendingPresetMsg;
+            window.pendingPresetMsg = null;
+            try {
+                // Re-fire via the original listener using a fresh synthetic MessageEvent
+                // so the TV bundle processes it normally (including setting V for later restore).
+                const syntheticEvent = new MessageEvent('message', { data: rawData });
+                listener.call(ctx, syntheticEvent);
+            } catch(e) { console.error('[WS Interceptor] Failed to flush pending preset:', e); }
         }
 
         // ── Wrap a listener ───────────────────────────────────────────────────
@@ -795,10 +808,11 @@
                 try {
                     const dec = await decrypt(event.data);
 
-                    // Delay apply_preset if video override is loading but not yet playing
+                    // Delay apply_preset if video override is loading but not yet playing.
+                    // Store rawData + listener so flushPendingPresets can replay it correctly.
                     if (dec && dec.type === 'apply_preset' && window.videoOverrideActive && !window.videoOverridePlaying) {
-                        console.log('[WS Interceptor] Delaying apply_preset until video override starts playing.');
-                        window.pendingPresetMsg = { listener, event, context: this };
+                        console.log('[WS Interceptor] Queuing apply_preset until video override starts playing.');
+                        window.pendingPresetMsg = { decoded: dec, rawData: event.data, listener, ctx: this };
                         return;
                     }
 
