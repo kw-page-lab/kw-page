@@ -666,8 +666,10 @@
                         window.videoOverridePlaying = false;
                         window.pendingPresetMsg = null;
 
-                        // Poll for the video element (created async by TV bundle after processing trigger_video)
-                        // Once found, wait for 'playing' or 'error' then flush the pending preset payload.
+                        // Poll for the video element (created async by TV bundle after processing trigger_video).
+                        // CRITICAL: when 'playing' fires, the TV bundle's own playing listener (which sets U=true)
+                        // may not have run yet — we must wait a tick before flushing so U=true when Te() runs,
+                        // otherwise Te() sees U=false and calls tt(null) which destroys the HLS player.
                         let _pollAttempts = 0;
                         const _maxPollMs = 8000;
                         const _pollInterval = 150;
@@ -680,14 +682,15 @@
                                 // Element found — attach one-time listeners
                                 const _done = (reason) => {
                                     if (window.videoOverridePlaying) return;
-                                    console.log('[WS Interceptor] Video ' + reason + ' → flushing pending preset.');
+                                    console.log('[WS Interceptor] Video ' + reason + ' → scheduling preset flush in 300ms (waiting for U=true).');
                                     window.videoOverridePlaying = true;
                                     clearInterval(_pollTimer);
-                                    flushPendingPresets();
                                     v.removeEventListener('playing', v._kwPlayListener);
                                     v.removeEventListener('error',   v._kwErrListener);
                                     delete v._kwPlayListener;
                                     delete v._kwErrListener;
+                                    // Delay so bundle's own 'playing' handler sets U=true first
+                                    setTimeout(flushPendingPresets, 300);
                                 };
                                 v._kwPlayListener = () => _done('playing');
                                 v._kwErrListener  = () => _done('error');
@@ -698,10 +701,10 @@
 
                             // Hard timeout — flush regardless so page doesn't get stuck
                             if (elapsed >= _maxPollMs && !window.videoOverridePlaying) {
-                                console.log('[WS Interceptor] Video override hard timeout — flushing preset.');
+                                console.log('[WS Interceptor] Video override hard timeout — flushing preset in 300ms.');
                                 window.videoOverridePlaying = true;
                                 clearInterval(_pollTimer);
-                                flushPendingPresets();
+                                setTimeout(flushPendingPresets, 300);
                             }
                         }, _pollInterval);
                     }
