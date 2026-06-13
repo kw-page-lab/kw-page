@@ -220,6 +220,9 @@ button:hover {
 .round-action-btn.social-btn-twitter {
     bottom: 128px;
 }
+.round-action-btn.social-btn-instagram {
+    bottom: 182px;
+}
 .camera-lock-btn:hover,
 .round-action-btn:hover {
     background-color: #d60101;
