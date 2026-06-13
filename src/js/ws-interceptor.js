@@ -918,7 +918,7 @@
                     if (window.actCurrentlyActive) onActOff(window.actActiveId);
                 }
             } catch(e) { /* ignore */ }
-        });
+        }));
 
         return proxy;
     };

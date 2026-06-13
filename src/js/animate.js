@@ -47,8 +47,8 @@ function animate() {
         window.act1Factor = Math.max(window.act1Target, window.act1Factor - deltaTime * act1TransitionSpeed);
     }
 
-    // Auto-focus on TV when scrolling down to bottom in Act 1 mode (only if focus lock is enabled)
-    if (document.body.classList.contains('act1-focus-lock') && window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
+    // Auto-focus on TV when scrolling down to bottom in Act 1 mode
+    if (window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
         isTVFocused = true;
         window.tvFocusStartTime = Date.now();
         tvYaw = 0;
@@ -84,9 +84,17 @@ function animate() {
     if (updateTV) {
         updateTV(now * 0.001, deltaTime);
     }
-    // Damp cabinet internal light intensity based on Act 1 factor
+    // Per-frame ACT2 update (grass growth, fireflies, factor lerp)
+    if (typeof window.updateAct2 === 'function') {
+        window.updateAct2(now * 0.001, deltaTime);
+    }
+    // Damp cabinet internal light based on whichever Act is strongest
     if (window.tvInternalCabinetLight) {
-        window.tvInternalCabinetLight.intensity *= (1.0 - window.act1Factor);
+        const actDim = Math.max(
+            typeof window.act1Factor !== 'undefined' ? window.act1Factor : 0.0,
+            typeof window.act2Factor !== 'undefined' ? window.act2Factor * 0.7 : 0.0  // ACT2 dims less aggressively
+        );
+        window.tvInternalCabinetLight.intensity *= (1.0 - actDim);
     }
     if (window.tvBezelLight && window.tvCrtLight) {
         window.tvBezelLight.color.copy(window.tvCrtLight.color);
