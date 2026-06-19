@@ -780,6 +780,20 @@
             console.log('[WS Interceptor] ACT2 visual sequence ACTIVE. Image ready:', !!window.act2ImageTexture);
         }
 
+        function isLiveStream(d) {
+            if (!d) return false;
+            const url = String(d.videoUrl || '');
+            const isYtLive = url.includes('wNJPvFoGalM');
+            return d.isLive === true ||
+                   d.live === true ||
+                   d.isLive === 'true' ||
+                   d.live === 'true' ||
+                   isYtLive ||
+                   url.includes('.m3u8') ||
+                   url.includes('hls_live') ||
+                   url.includes('live=1');
+        }
+
         // ── processMsg ───────────────────────────────────────────────────────
         // Returns { block: bool, modified: bool }
         function processMsg(dec) {
@@ -796,6 +810,16 @@
                     console.log('[WS Interceptor] Blocked audioOnly trigger_video from TV bundle.');
                 } else if (dec.type === 'trigger_video') {
                     handleAudioOnly(dec);
+                    
+                    if (isLiveStream(dec)) {
+                        dec.isLive = true;
+                        dec.live = true;
+                        dec.originalDuration = Infinity;
+                        dec.duration = Infinity;
+                        dec.startTime = Date.now();
+                        modified = true;
+                        console.log('[WS Interceptor] Live stream trigger detected: forcing infinite duration and current startTime.');
+                    }
                     // Detect YouTube Short → activate portrait pillarbox
                     const newIsShort = dec.isShort === true || dec.isShort === 'true' ||
                         !!(dec.videoUrl && dec.videoUrl.match(/\/shorts\/[a-zA-Z0-9_-]{11}/));
@@ -869,15 +893,9 @@
             // Restore volume
             try { v.volume = i.vol; } catch(e) {}
             if (i.live) {
-                // Live: sync to live edge
-                try {
-                    if (v.seekable && v.seekable.length > 0) {
-                        const edge = v.seekable.end(v.seekable.length - 1);
-                        if (isFinite(edge) && edge > 0) v.currentTime = Math.max(0, edge - 1.5);
-                    }
-                } catch(e) {}
-                if (v.paused) v.play().catch(()=>{});
-                console.log(`[WS Interceptor] ACT${id}: live stream resynced to live edge.`);
+                // Live: do not seek or play to prevent Hls.js decoder stalls.
+                // The server's restored video override event will cleanly reload the stream at the live edge.
+                console.log(`[WS Interceptor] ACT${id}: live stream resume deferred to incoming trigger event.`);
             } else {
                 // VOD: resume at exact captured timestamp
                 try {

@@ -378,12 +378,16 @@ window.setAct3 = function(active, elapsedSeconds, startEpoch) {
     if (active) {
         if (window.act3Active) {
             // Already running — just re-sync elapsed if server sent a correction
-            if (elapsed > 1) window.act3Elapsed = elapsed;
+            if (elapsed > 1) {
+                window.act3Elapsed = elapsed;
+                window.act3StartWallTime = Date.now() - elapsed * 1000;
+            }
             return;
         }
         window.act3Active  = true;
         window.act3RestoredTime = null;
         window.act3Elapsed = elapsed;
+        window.act3StartWallTime = Date.now() - elapsed * 1000;
         _prevTextIdx = -1; _tvOpacity = 0; _tvStarted = false;
         
         // BROADCASTING SYNC: pre-set factor to where it should be now
@@ -446,7 +450,11 @@ window.setAct3 = function(active, elapsedSeconds, startEpoch) {
 window.updateAct3 = function(nowSec, deltaTime) {
     if (!window.act3Active) return;
 
-    window.act3Elapsed += deltaTime;
+    if (window.act3StartWallTime) {
+        window.act3Elapsed = (Date.now() - window.act3StartWallTime) / 1000;
+    } else {
+        window.act3Elapsed += deltaTime;
+    }
     const t = window.act3Elapsed;
 
     // Environment factor lerp (always running)
