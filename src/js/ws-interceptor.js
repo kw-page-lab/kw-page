@@ -262,6 +262,16 @@
         if (typeof tag === 'string' && tag.toLowerCase() === 'video') {
             window.tvVideoElement = el;
 
+            // Block play() calls on the main video element during an active ACT
+            const _origPlay = el.play;
+            el.play = function() {
+                if ((window.actCurrentlyActive || window.act3Active) && this === window.actPausedVideoElement) {
+                    console.log('[WS Interceptor] Blocking play() call on video element during active ACT.');
+                    return Promise.resolve();
+                }
+                return _origPlay.apply(this, arguments);
+            };
+
             // Protect video element from out-of-bounds HLS seeking (Sync Shield)
             const _origDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
             if (_origDescriptor && _origDescriptor.set) {
@@ -820,6 +830,7 @@
                 window.act2ClampThreshold        = 0;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
+                window.actPausedVideoElement    = null;
                 window.shortVideoActive         = false;
             }
             return { block, modified };
@@ -831,6 +842,7 @@
             if (window.actCurrentlyActive && window.actActiveId === id) return;
             window.actCurrentlyActive = true; window.actActiveId = id;
             const v = window.tvVideoElement;
+            window.actPausedVideoElement = v;
             // Capture video state: track even if paused (auto-play may have been blocked)
             if (v && v.src) {
                 const live = !isFinite(v.duration) || v.duration === Infinity || v.duration === 0;
@@ -848,6 +860,7 @@
             // Accept any id if actCurrentlyActive — handles stale id mismatches
             if (!window.actCurrentlyActive) return;
             window.actCurrentlyActive = false; window.actActiveId = null;
+            window.actPausedVideoElement = null;
             const i = window.actPausedVideoInfo; window.actPausedVideoInfo = null;
             if (!i) return;
             const v = window.tvVideoElement; if (!v) return;
