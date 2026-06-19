@@ -126,8 +126,21 @@
 
     <!-- Fullscreen CRT TV Static Overlay -->
     <div id="full-screen-static-overlay" class="full-screen-static-overlay">
-        <video id="static-video" src="assets/tv_static.mp4" loop playsinline></video>
+        <video id="static-video" loop playsinline></video>
     </div>
+    <script>
+        (function() {
+            const vid = document.getElementById('static-video');
+            if (vid) {
+                const h = location.hostname;
+                let src = 'assets/tv_static.mp4';
+                if (h !== 'localhost' && !h.includes('127.0.0.1') && !h.includes('macrostasis.dev')) {
+                    src = 'https://kimeraware.macrostasis.dev/assets/tv_static.mp4';
+                }
+                vid.src = src;
+            }
+        })();
+    </script>
 
     <!-- Import Three.js, OrbitControls and GLTFLoader -->
     <script src="src/js/ws-interceptor.js?v=act3-r4"></script>
