@@ -79,6 +79,11 @@ function updateEnvironmentFromTime() {
         window.act2Factor = 0.0;
     }
 
+    // --- ACT3 FACTOR (driven entirely by act3.js) ---
+    if (typeof window.act3Factor === 'undefined') {
+        window.act3Factor = 0.0;
+    }
+
     // --- LERP ACT1 STATE OVERRIDES ---
     if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
         // 1. Darken background and fog colors towards near pitch black
@@ -137,6 +142,29 @@ function updateEnvironmentFromTime() {
         }
     }
 
+    // --- LERP ACT3 STATE OVERRIDES (darkest of all — pitch black, total silence) ---
+    if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.001) {
+        const f = window.act3Factor;
+
+        // 1. Absolute pitch black background
+        bgColCached.lerp(new THREE.Color(0x000000), f);
+
+        // 2. Ultra-tight fog — almost no visibility
+        dynamicFogNear = THREE.MathUtils.lerp(dynamicFogNear, 2.0, f);
+        dynamicFogFar  = THREE.MathUtils.lerp(dynamicFogFar,  10.0, f);
+
+        // 3. Zero ambient — total darkness
+        ambInt = THREE.MathUtils.lerp(ambInt, 0.0, f);
+
+        // 4. Red emissive blocks killed entirely
+        emissiveRed = THREE.MathUtils.lerp(emissiveRed, 0.0, f);
+
+        // 5. Dense mist
+        if (window.act1MistMaterial && window.act1MistMaterial.uniforms) {
+            window.act1MistMaterial.uniforms.uOpacityFactor.value = f;
+        }
+    }
+
     // Apply to scene background and fog
     if (scene) {
         if (scene.background) scene.background.copy(bgColCached);
@@ -175,8 +203,10 @@ function updateEnvironmentFromTime() {
             dirLight.intensity = keyInt * elevationFactor;
         }
 
-        // Lerp key light to 0 for ACT1, and to 40% for ACT2 (semi-dim, not off)
-        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+        // Lerp key light to 0 for ACT1/ACT3, and to 40% for ACT2
+        if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+            dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 0.0, window.act3Factor);
+        } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
             dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, 0.0, window.act1Factor);
         } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
             dirLight.intensity = THREE.MathUtils.lerp(dirLight.intensity, dirLight.intensity * 0.4, window.act2Factor);
@@ -187,9 +217,11 @@ function updateEnvironmentFromTime() {
     if (standardRed) standardRed.emissiveIntensity = emissiveRed;
     if (lambertRed) lambertRed.emissiveIntensity = emissiveRed;
 
-    // Apply to TV spotlight — ACT1 kills it, ACT2 widens it (angle) and boosts slightly
+    // Apply to TV spotlight — ACT1/ACT3 kill it, ACT2 widens it
     if (window.tvSpotlight) {
-        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+        if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+            window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act3Factor);
+        } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
             window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act1Factor);
         } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
             // Keep intensity but open the cone angle wider
@@ -233,7 +265,10 @@ function updateEnvironmentFromTime() {
     // Apply to background particles
     if (starField && starField.material) {
         let currentStarOpacity = starOpacity;
-        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+        if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+            // ACT3: completely invisible (total darkness)
+            currentStarOpacity = THREE.MathUtils.lerp(starOpacity, 0.0, window.act3Factor);
+        } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
             // ACT1: fade out completely
             currentStarOpacity = THREE.MathUtils.lerp(starOpacity, 0.0, window.act1Factor);
         } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {

@@ -88,6 +88,10 @@ function animate() {
     if (typeof window.updateAct2 === 'function') {
         window.updateAct2(now * 0.001, deltaTime);
     }
+    // Per-frame ACT3 update (sequence timer, morse, audio, TV video)
+    if (typeof window.updateAct3 === 'function') {
+        window.updateAct3(now * 0.001, deltaTime);
+    }
     // Damp cabinet internal light based on whichever Act is strongest
     if (window.tvInternalCabinetLight) {
         const actDim = Math.max(

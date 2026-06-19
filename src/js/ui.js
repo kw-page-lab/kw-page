@@ -392,6 +392,9 @@ function setupUIEventListeners() {
             }
         }
     }, { passive: true });
+    
+    // Initialize the TV static key trigger
+    setupTVStaticKeyboardTrigger();
 }
 
 // Update Camera Lock button UI (🔒 / 🔓 SVGs)
@@ -402,4 +405,117 @@ function updateCameraLockUI() {
     if (lockIcon) {
         lockIcon.innerHTML = isCameraLocked ? svgLocked : svgUnlocked;
     }
+}
+
+// Trigger Fullscreen TV Static overlay on Shift + B key holding
+let isStaticActive = false;
+
+// Initialize global variables for dynamic texts (easy to override via WebSockets later)
+if (!window.staticTexts) {
+    window.staticTexts = [
+        "Ella vendrá",
+        "y el Cielo Eterno abrirá su vientre",
+        "derramando hijos que no son nuestros",
+        "lo que aún arde deberá extinguirse",
+        "lo que aún duerme...",
+        "deberá soñar con ella"
+    ];
+}
+if (typeof window.staticTextIndex === 'undefined') {
+    window.staticTextIndex = 0;
+}
+
+function setupTVStaticKeyboardTrigger() {
+    const overlay = document.getElementById('full-screen-static-overlay');
+    const video = document.getElementById('static-video');
+    const taglineEl = document.getElementById('static-tagline');
+    if (!overlay || !video) return;
+
+    window.addEventListener('keydown', (e) => {
+        // Shift + B triggers the overlay (e.code === 'KeyB' and e.shiftKey)
+        if (e.code === 'KeyB' && e.shiftKey) {
+            // Only allow on localhost and dev subdomain (disabled on kimeraware.com)
+            const isLocalOrDev = window.location.hostname === 'localhost' || 
+                                 window.location.hostname === '127.0.0.1' || 
+                                 window.location.hostname.includes('macrostasis.dev');
+            if (!isLocalOrDev) return;
+
+            if (isStaticActive) return; // Prevent repeated triggers from OS key repeating
+            isStaticActive = true;
+
+            // Hide previous tagline instantly when static plays
+            if (taglineEl) {
+                taglineEl.classList.remove('active');
+            }
+
+            overlay.classList.add('active');
+            
+            // Randomize video playback time for realistic analog tuning feel
+            if (video.duration) {
+                video.currentTime = Math.random() * video.duration;
+            }
+            
+            video.muted = false;
+            video.volume = 1.0;
+            
+            video.play().catch(err => {
+                console.warn('[Static Overlay] Play blocked by browser, trying muted fallback:', err);
+                video.muted = true;
+                video.play().catch(e => console.error('[Static Overlay] Video playback failed entirely:', e));
+            });
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyB') {
+            if (!isStaticActive) return;
+            isStaticActive = false;
+
+            overlay.classList.remove('active');
+            video.pause();
+            
+            // Set text and show new tagline AFTER static ends
+            if (taglineEl && window.staticTexts && window.staticTexts.length > 0) {
+                const textIdx = window.staticTextIndex % window.staticTexts.length;
+                taglineEl.innerHTML = formatTaglineText(window.staticTexts[textIdx]);
+                taglineEl.classList.add('active');
+            }
+            
+            // Advance to the next text for the next cycle
+            window.staticTextIndex++;
+        }
+    });
+
+    // Reset overlay and tagline state if window loses focus during keydown
+    window.addEventListener('blur', () => {
+        if (isStaticActive) {
+            isStaticActive = false;
+            overlay.classList.remove('active');
+            video.pause();
+        }
+        if (taglineEl) {
+            taglineEl.classList.remove('active');
+        }
+    });
+}
+
+// Utility to format tagline text for SLNTHLN compatibility
+function formatTaglineText(text) {
+    let formatted = text.toUpperCase();
+    
+    // Replace Spanish accents/tildes with plain characters
+    formatted = formatted
+        .replace(/Á/g, 'A')
+        .replace(/É/g, 'E')
+        .replace(/Í/g, 'I')
+        .replace(/Ó/g, 'O')
+        .replace(/Ú/g, 'U');
+        
+    // Replace Ñ with custom CSS hacked Ñ using N + tilde overlay
+    formatted = formatted.replace(/Ñ/g, '<span class="letter-n-tilde">N</span>');
+    
+    // Highlight ELLA in red
+    formatted = formatted.replace(/\bELLA\b/g, '<span class="highlight-red">ELLA</span>');
+    
+    return formatted;
 }

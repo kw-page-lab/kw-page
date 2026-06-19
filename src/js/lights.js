@@ -31,7 +31,10 @@ function createInteriorLights() {
 function updateInteriorLights() {
     const baseIntensity = params.interiorLight ? 3.5 : 0.0;
     let intensity = baseIntensity;
-    if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+    if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+        // ACT3: interior lights fully off — only Morse letter flashes break the dark
+        intensity = THREE.MathUtils.lerp(baseIntensity, 0.0, window.act3Factor);
+    } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
         // ACT1: lights go fully off
         intensity = THREE.MathUtils.lerp(baseIntensity, 0.0, window.act1Factor);
     } else if (typeof window.act2Factor !== 'undefined' && window.act2Factor > 0.0) {
@@ -47,7 +50,12 @@ function updateInteriorLights() {
     const baseWhiteEmissive = params.interiorLight ? 0.65 : 0.0;
     
     let whiteEmissive = baseWhiteEmissive;
-    if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+    if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+        // ACT3: white letters driven ONLY by Morse code intensity (0 = off, high = on)
+        // Lerp from normal to zero as act3 fades in, then morse overrides
+        const morseIntensity = window.act3MorseIntensity || 0.0;
+        whiteEmissive = THREE.MathUtils.lerp(baseWhiteEmissive, morseIntensity, window.act3Factor);
+    } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
         const time = performance.now() * 0.001;
         
         // High frequency electrical jitter
@@ -74,7 +82,16 @@ function updateInteriorLights() {
         
     if (standardWhite) standardWhite.emissiveIntensity = whiteEmissive;
     if (lambertWhite) {
-        if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
+        if (typeof window.act3Factor !== 'undefined' && window.act3Factor > 0.0) {
+            // ACT3: directly match standardWhite (no flicker — clean Morse blink)
+            const morseVal = window.act3MorseIntensity || 0.0;
+            const blended = THREE.MathUtils.lerp(
+                params.interiorLight ? 0xcccccc : 0x000000,
+                morseVal > 0.1 ? 0xffffff : 0x000000,
+                window.act3Factor
+            );
+            lambertWhite.emissive.setHex(blended);
+        } else if (typeof window.act1Factor !== 'undefined' && window.act1Factor > 0.0) {
             // Scale emissive color based on the current flicker ratio relative to base intensity
             const brightnessRatio = Math.max(0.01, whiteEmissive / 0.65);
             const targetColor = new THREE.Color(0xcccccc).multiplyScalar(brightnessRatio);

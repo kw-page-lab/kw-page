@@ -224,10 +224,11 @@
         lockUniform(m.uniforms, 'uChildVisibility', 0);
         lockUniform(m.uniforms, 'uTexture', tex);
         lockUniform(m.uniforms, 'uTextureText', null);
+        lockUniform(m.uniforms, 'uPowerOff', 0);
     }
     function unlockAct2Uniforms(m) {
         if (!m || !m.uniforms) return;
-        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText'].forEach(k => unlockUniform(m.uniforms, k));
+        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText', 'uPowerOff'].forEach(k => unlockUniform(m.uniforms, k));
     }
 
     let _blackTex = null;
@@ -405,12 +406,77 @@
                                 }
                                 m.needsUpdate = true;
                             }
-                        } else if (_act2UniformsLocked) {
+                        } else if (_act2UniformsLocked && !window.act3Active) {
                             // Safety: if sequence stopped unexpectedly, unlock
                             const m = window._kwMat;
                             unlockAct2Uniforms(m);
                             _act2UniformsLocked = false;
                             console.log('[WS Interceptor] ACT2: uniforms unlocked (safety cleanup).');
+                        }
+
+                        // ── ACT3 TV override ─────────────────────────────────────────────────
+                        // Three states driven by flags set in act3.js each frame:
+                        //   act3TvBlack   → black texture on CRT (phases 0, 4, pre-fade)
+                        //   act3TvStatic  → static noise on CRT  (phases 1 and 3)
+                        //   act3TvTexture → canvas-blended video  (fade-in during phase 2)
+                        if (window.act3Active && !window.act2VisualSequenceActive) {
+                            const m3 = window._kwMat;
+                            if (m3 && m3.uniforms) {
+                                let tex3;
+                                if (window.act3TvTexture) {
+                                    tex3 = window.act3TvTexture;
+                                } else if (window.act3TvBlack) {
+                                    tex3 = getBlackTex();
+                                } else if (window.act3TvStatic) {
+                                    tex3 = updateStaticNoise();
+                                }
+                                if (tex3) {
+                                    if (!_act2UniformsLocked) {
+                                        lockAct2Uniforms(m3, tex3);
+                                        _act2UniformsLocked = true;
+                                        console.log('[WS Interceptor] ACT3: TV uniforms locked.');
+                                    } else {
+                                        setLockedUniformValue('uTexture', tex3);
+                                        setLockedUniformValue('uTextureText', getBlankTextTex());
+                                    }
+
+                                    // Dynamic uIsVideo: 1 during the actual video phase, 0 during static/black
+                                    if (m3.uniforms.uIsVideo && m3.uniforms.uIsVideo.__kwLocked) {
+                                        setLockedUniformValue('uIsVideo', window.act3TvTexture ? 1 : 0);
+                                    }
+
+                                    // Dynamic uPowerOff: 1 during black phases, 0 during static/video
+                                    if (m3.uniforms.uPowerOff && m3.uniforms.uPowerOff.__kwLocked) {
+                                        setLockedUniformValue('uPowerOff', window.act3TvBlack ? 1 : 0);
+                                    }
+
+                                    m3.needsUpdate = true;
+                                }
+                            }
+
+                            // Dynamic TV light intensities for PowerOff visual sync
+                            if (window.act3TvBlack) {
+                                if (window.tvCrtLight) window.tvCrtLight.intensity = 0;
+                                if (window.tvBezelLight) window.tvBezelLight.intensity = 0;
+                            } else {
+                                if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5;
+                            }
+                        } else if (!window.act3Active && _act2UniformsLocked && !window.act2VisualSequenceActive) {
+                            const m3 = window._kwMat;
+                            unlockAct2Uniforms(m3);
+                            _act2UniformsLocked = false;
+                            if (m3 && m3.uniforms) {
+                                if (m3.uniforms.uTexture)         m3.uniforms.uTexture.value         = window._kwOrigTex;
+                                if (m3.uniforms.uTextureText)     m3.uniforms.uTextureText.value     = window._kwOrigTextTex;
+                                if (m3.uniforms.uChildVisibility) m3.uniforms.uChildVisibility.value = window._kwOrigChildVis;
+                                if (m3.uniforms.uScaleX)          m3.uniforms.uScaleX.value          = 1;
+                                if (m3.uniforms.uScaleY)          m3.uniforms.uScaleY.value          = 1;
+                                if (m3.uniforms.uIsVideo)         m3.uniforms.uIsVideo.value         = window._kwOrigIsVid;
+                                if (m3.uniforms.uPowerOff)         m3.uniforms.uPowerOff.value         = 0;
+                                m3.needsUpdate = true;
+                            }
+                            if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5;
+                            console.log('[WS Interceptor] ACT3: TV uniforms restored.');
                         }
 
                         // ── Short video portrait pillarbox ─────────────────────────────────
@@ -912,6 +978,8 @@
                         } else {
                             window.pendingAct1State = { active: false };
                         }
+                        // Act3: deactivate if act2 starts
+                        if (typeof window.setAct3 === 'function' && window.act3Active) window.setAct3(false);
                         // Activate visual sequence if audioOnly is already running
                         if (window.audioOnlyActive && !window.act2VisualSequenceActive) {
                             activateAct2Visual(d.mainImageData || window.lastAct2ImageUrl);
@@ -921,6 +989,23 @@
                             window.setAct2(false);
                         } else {
                             window.pendingAct2State = { active: false };
+                        }
+                    }
+
+                    // ── ACT3 ──────────────────────────────────────────────────────────────
+                    if (pid === 'act3' || d.act3 === true) {
+                        if (typeof window.setAct3 === 'function') {
+                            window.setAct3(true, d.elapsedSeconds || 0, d.startTime || null);
+                        }
+                        // Deactivate act1 and act2
+                        if (typeof window.setAct1 === 'function') window.setAct1(false);
+                        else window.pendingAct1State = { active: false };
+                        if (typeof window.setAct2 === 'function') window.setAct2(false);
+                        else window.pendingAct2State = { active: false };
+                    } else if (d.type === 'apply_preset' && pid !== 'act3') {
+                        // Any non-act3 preset stops act3
+                        if (typeof window.setAct3 === 'function' && window.act3Active) {
+                            window.setAct3(false);
                         }
                     }
 
@@ -934,6 +1019,9 @@
                         window.setAct2(false);
                     } else {
                         window.pendingAct2State = { active: false };
+                    }
+                    if (typeof window.setAct3 === 'function' && window.act3Active) {
+                        window.setAct3(false);
                     }
                     window.lastAppliedPreset = null;
                     if (window.actCurrentlyActive) onActOff(window.actActiveId);

@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="src/css/variables.css">
     <link rel="stylesheet" href="src/css/fonts.v2.css?v=act4">
     <link rel="stylesheet" href="src/css/loader.css">
-    <link rel="stylesheet" href="src/css/layout.css?v=act2-r38">
+    <link rel="stylesheet" href="src/css/layout.css?v=act2-r38-static-v7">
     <link rel="stylesheet" href="src/css/controls.css?v=act2-r41">
     <link rel="stylesheet" href="src/css/sidebar.css">
     <link rel="stylesheet" href="src/css/responsive.css?v=act2-r41">
@@ -121,8 +121,16 @@
         </svg>
     </a>
 
+    <!-- Centered dynamic tagline (shown after static) -->
+    <div id="static-tagline" class="static-tagline-text"></div>
+
+    <!-- Fullscreen CRT TV Static Overlay -->
+    <div id="full-screen-static-overlay" class="full-screen-static-overlay">
+        <video id="static-video" src="assets/tv_static.mp4" loop playsinline></video>
+    </div>
+
     <!-- Import Three.js, OrbitControls and GLTFLoader -->
-    <script src="src/js/ws-interceptor.js?v=act2-r40"></script>
+    <script src="src/js/ws-interceptor.js?v=act3-r4"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="src/js/colormanagement-polyfill.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -136,17 +144,18 @@
     <script src="src/js/autoreload.js"></script>
     <script src="src/js/config.js"></script>
     <script src="src/js/loader-manager.js"></script>
-    <script src="src/js/environment.js?v=act2-r33"></script>
+    <script src="src/js/environment.js?v=act3-r2"></script>
     <script src="src/js/particles.js"></script>
-    <script src="src/js/lights.js?v=act2-r33"></script>
+    <script src="src/js/lights.js?v=act3-r2"></script>
     <script src="src/js/floor.js"></script>
     <script src="src/js/atmosphere.js?v=act2-r33"></script>
     <script src="src/js/monolith.js"></script>
     <script src="src/js/tv.js?v=act2-r33"></script>
     <script src="src/js/camera.js?v=act2-r33"></script>
-    <script src="src/js/ui.js?v=act2-r33"></script>
-    <script src="src/js/act2.js?v=act2-r33"></script>
-    <script src="src/js/animate.js?v=act2-r33"></script>
+    <script src="src/js/ui.js?v=act2-r33-static-v4"></script>
+    <script src="src/js/act2.js?v=act3-r4"></script>
+    <script src="src/js/act3.js?v=act3-r4"></script>
+    <script src="src/js/animate.js?v=act3-r4"></script>
     <script src="src/js/scene.js?v=act2-r33"></script>
     <script src="src/js/main.js"></script>
 </body>
