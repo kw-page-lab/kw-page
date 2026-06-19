@@ -419,11 +419,16 @@
                         //   act3TvBlack   → black texture on CRT (phases 0, 4, pre-fade)
                         //   act3TvStatic  → static noise on CRT  (phases 1 and 3)
                         //   act3TvTexture → canvas-blended video  (fade-in during phase 2)
-                        if (window.act3Active && !window.act2VisualSequenceActive) {
+                        const now = Date.now();
+                        const isRestoring = !window.act3Active && _act2UniformsLocked && window.act3RestoredTime && (now - window.act3RestoredTime < 1500);
+
+                        if ((window.act3Active || isRestoring) && !window.act2VisualSequenceActive) {
                             const m3 = window._kwMat;
                             if (m3 && m3.uniforms) {
                                 let tex3;
-                                if (window.act3TvTexture) {
+                                if (isRestoring) {
+                                    tex3 = getBlackTex();
+                                } else if (window.act3TvTexture) {
                                     tex3 = window.act3TvTexture;
                                 } else if (window.act3TvBlack) {
                                     tex3 = getBlackTex();
@@ -442,12 +447,12 @@
 
                                     // Dynamic uIsVideo: 1 during the actual video phase, 0 during static/black
                                     if (m3.uniforms.uIsVideo && m3.uniforms.uIsVideo.__kwLocked) {
-                                        setLockedUniformValue('uIsVideo', window.act3TvTexture ? 1 : 0);
+                                        setLockedUniformValue('uIsVideo', (!isRestoring && window.act3TvTexture) ? 1 : 0);
                                     }
 
-                                    // Dynamic uPowerOff: 1 during black phases, 0 during static/video
+                                    // Dynamic uPowerOff: 1 during black/restoring phases, 0 during static/video
                                     if (m3.uniforms.uPowerOff && m3.uniforms.uPowerOff.__kwLocked) {
-                                        setLockedUniformValue('uPowerOff', window.act3TvBlack ? 1 : 0);
+                                        setLockedUniformValue('uPowerOff', (isRestoring || window.act3TvBlack) ? 1 : 0);
                                     }
 
                                     m3.needsUpdate = true;
@@ -455,7 +460,7 @@
                             }
 
                             // Dynamic TV light intensities for PowerOff visual sync
-                            if (window.act3TvBlack) {
+                            if (isRestoring || window.act3TvBlack) {
                                 if (window.tvCrtLight) window.tvCrtLight.intensity = 0;
                                 if (window.tvBezelLight) window.tvBezelLight.intensity = 0;
                             } else {

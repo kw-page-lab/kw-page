@@ -364,9 +364,10 @@ window.setAct3 = function(active, elapsedSeconds, startEpoch) {
             return;
         }
         window.act3Active  = true;
+        window.act3RestoredTime = null;
         window.act3Elapsed = elapsed;
         _prevTextIdx = -1; _tvOpacity = 0; _tvStarted = false;
-
+        
         // BROADCASTING SYNC: pre-set factor to where it should be now
         if (elapsed < ACT3_STATIC_2_END) {
             window.act3Target = 1.0;
@@ -407,6 +408,7 @@ window.setAct3 = function(active, elapsedSeconds, startEpoch) {
 
     } else {
         window.act3Active = false;
+        window.act3RestoredTime = Date.now();
         document.body.classList.remove('act3-active');
         _act3Cleanup();
     }
