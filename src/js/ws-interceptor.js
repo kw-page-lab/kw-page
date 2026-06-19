@@ -820,6 +820,9 @@
                         modified = true;
                         console.log('[WS Interceptor] Live stream trigger detected: forcing infinite duration and current startTime.');
                     }
+                    
+                    // Store active override for reloading on resume
+                    window._kwActiveVideoOverride = JSON.parse(JSON.stringify(dec));
                     // Detect YouTube Short → activate portrait pillarbox
                     const newIsShort = dec.isShort === true || dec.isShort === 'true' ||
                         !!(dec.videoUrl && dec.videoUrl.match(/\/shorts\/[a-zA-Z0-9_-]{11}/));
@@ -893,9 +896,28 @@
             // Restore volume
             try { v.volume = i.vol; } catch(e) {}
             if (i.live) {
-                // Live: do not seek or play to prevent Hls.js decoder stalls.
-                // The server's restored video override event will cleanly reload the stream at the live edge.
-                console.log(`[WS Interceptor] ACT${id}: live stream resume deferred to incoming trigger event.`);
+                // Live: reload the stream cleanly at the live edge by simulated reset + trigger_video
+                if (window._kwActiveVideoOverride && window._kwActiveWs) {
+                    console.log(`[WS Interceptor] ACT${id}: reloading live stream at the live edge (reset + trigger_video).`);
+                    
+                    // 1. Send simulated reset to clear the internal Je URL cache
+                    window._kwActiveWs.dispatchEvent(new MessageEvent('message', {
+                        data: JSON.stringify({ type: 'reset', _simulated: true })
+                    }));
+                    
+                    // 2. Send simulated trigger_video to reload Hls.js player
+                    const triggerData = {
+                        ...window._kwActiveVideoOverride,
+                        startTime: Date.now(),
+                        _simulated: true
+                    };
+                    window._kwActiveWs.dispatchEvent(new MessageEvent('message', {
+                        data: JSON.stringify(triggerData)
+                    }));
+                } else {
+                    if (v.paused) v.play().catch(()=>{});
+                    console.log(`[WS Interceptor] ACT${id}: live stream resumed (no reload state).`);
+                }
             } else {
                 // VOD: resume at exact captured timestamp
                 try {
@@ -963,12 +985,13 @@
                 t[p] = v; return true;
             }
         });
+        window._kwActiveWs = proxy; // Save global reference
 
         // ── Raw listener: ACT state machine ──────────────────────────────────
         ws.addEventListener('message', wrapRaw(async (event) => {
             try {
                 const d = event.__decryptedData;
-                if (!d) return;
+                if (!d || d._simulated) return;
 
                 // ── Dynamic tagline updates ──
                 if (d.tagline1 !== undefined && d.tagline1 !== null) {
