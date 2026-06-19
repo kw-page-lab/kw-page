@@ -260,7 +260,9 @@
     document.createElement = function(tag, opts) {
         const el = _origCE(tag, opts);
         if (typeof tag === 'string' && tag.toLowerCase() === 'video') {
-            window.tvVideoElement = el;
+            if (!window.creatingAct3Video && !el.dataset.isAct3Video) {
+                window.tvVideoElement = el;
+            }
 
             // Block play() calls on the main video element during an active ACT
             const _origPlay = el.play;
@@ -474,7 +476,7 @@
                                 if (window.tvCrtLight) window.tvCrtLight.intensity = 0;
                                 if (window.tvBezelLight) window.tvBezelLight.intensity = 0;
                             } else {
-                                if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5;
+                                if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5 * 1.5;
                             }
                         } else if (!window.act3Active && _act2UniformsLocked && !window.act2VisualSequenceActive) {
                             const m3 = window._kwMat;
@@ -490,7 +492,7 @@
                                 if (m3.uniforms.uPowerOff)         m3.uniforms.uPowerOff.value         = 0;
                                 m3.needsUpdate = true;
                             }
-                            if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5;
+                            if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5 * 1.5;
                             console.log('[WS Interceptor] ACT3: TV uniforms restored.');
                         }
 

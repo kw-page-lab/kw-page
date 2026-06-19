@@ -102,7 +102,7 @@ function animate() {
     }
     if (window.tvBezelLight && window.tvCrtLight) {
         window.tvBezelLight.color.copy(window.tvCrtLight.color);
-        window.tvBezelLight.intensity = (window.tvCrtLight.intensity / 16.0) * 4.5;
+        window.tvBezelLight.intensity = (window.tvCrtLight.intensity / 16.0) * 4.5 * 1.5;
     }
     if (window.tvBasePosition) {
         const bob = Math.sin(now * 0.0015) * 0.08;

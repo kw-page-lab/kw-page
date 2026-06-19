@@ -205,6 +205,11 @@ function _stopAudio() {
     _audioEl.pause();
     _audioEl.currentTime = 0;
 }
+function _setAudioVolume(vol) {
+    if (_audioEl) {
+        _audioEl.volume = vol;
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  TV VIDEO — canvas-blended texture, sRGB, starts muted for
@@ -224,7 +229,10 @@ function _initTV(seekTo) {
         return;
     }
 
+    window.creatingAct3Video = true;
     const v       = document.createElement('video');
+    window.creatingAct3Video = false;
+    v.dataset.isAct3Video = "true";
     v.src         = _resolveAssetUrl(ACT3_VIDEO_URL);
     v.crossOrigin = 'anonymous';
     v.muted       = true;
@@ -379,13 +387,21 @@ window.setAct3 = function(active, elapsedSeconds, startEpoch) {
         _prevTextIdx = -1; _tvOpacity = 0; _tvStarted = false;
         
         // BROADCASTING SYNC: pre-set factor to where it should be now
-        if (elapsed < ACT3_STATIC_2_END) {
+        if (elapsed < ACT3_BLACK_1_END) {
+            window.act3Target = 0.0;
+            window.act3Factor = 0.0;
+        } else if (elapsed < ACT3_STATIC_1_END) {
             window.act3Target = 1.0;
-            window.act3Factor = Math.min(1.0, elapsed / 3.0);
+            window.act3Factor = Math.min(1.0, (elapsed - ACT3_BLACK_1_END) / 3.0);
+        } else if (elapsed < ACT3_SEQUENCE_END) {
+            window.act3Target = 1.0;
+            window.act3Factor = 1.0;
+        } else if (elapsed < ACT3_STATIC_2_END) {
+            window.act3Target = 0.0;
+            window.act3Factor = Math.max(0.0, 1.0 - (elapsed - ACT3_SEQUENCE_END) / 3.0);
         } else {
             window.act3Target = 0.0;
-            const fadeOutElapsed = elapsed - ACT3_STATIC_2_END;
-            window.act3Factor = Math.max(0.0, 1.0 - fadeOutElapsed / 3.0);
+            window.act3Factor = 0.0;
         }
 
         document.body.classList.add('act3-active');
@@ -444,22 +460,23 @@ window.updateAct3 = function(nowSec, deltaTime) {
     if (t < ACT3_BLACK_1_END) {
         window.act3TvBlack = true; window.act3TvStatic = false; window.act3TvTexture = null;
         _setStaticOverlay(false);
-        window.act3Target = 1.0;
+        window.act3Target = 0.0;
         window.act3MorseIntensity = 0;
         return;
     }
 
-    // ── Phase 1: Static on TV (5–10 s) ───────────────────────────
+    // ── Phase 1: Static on TV (5–10 s) — Total Silence & Background dark/fog transition ────
     if (t < ACT3_STATIC_1_END) {
         window.act3TvBlack = false; window.act3TvStatic = true; window.act3TvTexture = null;
         _setStaticOverlay(true);
         window.act3Target = 1.0;
         window.act3MorseIntensity = 0;
-        _playAudio();
+        _setAudioVolume(0.0);
+        _playAudio(); // plays in background (muted) to retain perfect sync
         return;
     }
 
-    // ── Phase 2: Main sequence (10–100 s) ────────────────────────
+    // ── Phase 2: Main sequence (10–100 s) — Audio unmuted ────────
     if (t < ACT3_SEQUENCE_END) {
         window.act3Target = 1.0;
 
@@ -472,19 +489,21 @@ window.updateAct3 = function(nowSec, deltaTime) {
         }
 
         _updateMorse(t);
+        _setAudioVolume(0.85); // Restore transmission audio volume
         _playAudio();
         _updateSequence(t);
         return;
     }
 
-    // ── Phase 3: Eternal static (100–110 s) ──────────────────────
+    // ── Phase 3: Eternal static (100–110 s) — Total Silence & Return to default background ────
     if (t < ACT3_STATIC_2_END) {
         window.act3TvBlack = false; window.act3TvStatic = true; window.act3TvTexture = null;
         _setStaticOverlay(true);
         const tagEl = document.getElementById('static-tagline');
         if (tagEl) tagEl.classList.remove('active');
         window.act3MorseIntensity = 0;
-        window.act3Target = 1.0;
+        window.act3Target = 0.0;
+        _setAudioVolume(0.0); // Muted for final static silence
         _playAudio();
         return;
     }
