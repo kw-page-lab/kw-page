@@ -951,11 +951,11 @@
                 if (!d) return;
 
                 // ── Dynamic tagline updates ──
-                if (d.tagline1 !== undefined) {
+                if (d.tagline1 !== undefined && d.tagline1 !== null) {
                     const el = document.getElementById('tagline-distorsiona');
                     if (el) el.innerText = d.tagline1;
                 }
-                if (d.tagline2 !== undefined) {
+                if (d.tagline2 !== undefined && d.tagline2 !== null) {
                     const el = document.getElementById('tagline-comienza');
                     if (el) el.innerText = d.tagline2;
                 }

@@ -346,8 +346,18 @@ function _act3Cleanup() {
     // Restore taglines
     const tl1 = document.getElementById('tagline-distorsiona');
     const tl2 = document.getElementById('tagline-comienza');
-    if (tl1 && tl1._act3Backup !== undefined) { tl1.innerText = tl1._act3Backup; delete tl1._act3Backup; }
-    if (tl2 && tl2._act3Backup !== undefined) { tl2.innerText = tl2._act3Backup; delete tl2._act3Backup; }
+    if (tl1 && tl1._act3Backup !== undefined) {
+        if (tl1.innerText === '' && tl1._act3Backup) {
+            tl1.innerText = tl1._act3Backup;
+        }
+        delete tl1._act3Backup;
+    }
+    if (tl2 && tl2._act3Backup !== undefined) {
+        if (tl2.innerText === '' && tl2._act3Backup) {
+            tl2.innerText = tl2._act3Backup;
+        }
+        delete tl2._act3Backup;
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════
