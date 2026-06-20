@@ -291,6 +291,14 @@
                                           (this.src && (this.src.includes('wNJPvFoGalM') || this.src.includes('hls_live') || this.src.includes('live=1')));
 
                         if (isHlsLive) {
+                            // BLOCK all seeks that are not initiated internally by Hls.js
+                            const stack = new Error().stack || '';
+                            const isFromHls = stack.includes('hls.js') || stack.includes('hls.min.js');
+                            if (!isFromHls) {
+                                console.log('[Sync Shield] Live Stream: swallowing manual/sync/drift seek to ' + val.toFixed(1) + 's');
+                                return;
+                            }
+
                             // For live streams, only allow seeks that fall inside the current seekable range
                             let minSeekable = 0;
                             let maxSeekable = 0;
@@ -886,6 +894,11 @@
                     console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
                 }
 
+            } else if (dec.type === 'video_sync') {
+                if (window._kwActiveVideoOverride && isLiveStream(window._kwActiveVideoOverride)) {
+                    block = true;
+                    console.log('[WS Interceptor] Blocked video_sync message for HLS livestream to prevent drift seeks.');
+                }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
                 window.audioOnlyActive          = false;
