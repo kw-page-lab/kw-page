@@ -280,17 +280,54 @@
                 Object.defineProperty(el, 'currentTime', {
                     get: _origDescriptor.get,
                     set: function(val) {
-                        let maxSeekable = 0;
-                        try {
-                            if (this.seekable && this.seekable.length > 0) {
-                                maxSeekable = this.seekable.end(this.seekable.length - 1);
-                            }
-                        } catch (e) {}
+                        const isLive = window._kwActiveVideoOverride && 
+                                       (window._kwActiveVideoOverride.isLive === true || 
+                                        window._kwActiveVideoOverride.live === true || 
+                                        window._kwActiveVideoOverride.isLive === 'true' || 
+                                        window._kwActiveVideoOverride.live === 'true' || 
+                                        String(window._kwActiveVideoOverride.videoUrl).includes('wNJPvFoGalM') || 
+                                        String(window._kwActiveVideoOverride.videoUrl).includes('hls-wNJPvFoGalM'));
+                        const isHlsLive = isLive || 
+                                          (this.src && (this.src.includes('wNJPvFoGalM') || this.src.includes('hls_live') || this.src.includes('live=1')));
 
-                        if (maxSeekable > 0 && val > maxSeekable + 2.0) {
-                            console.log('[Sync Shield] Swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (max seekable: ' + maxSeekable.toFixed(1) + 's)');
-                            return;
+                        if (isHlsLive) {
+                            // For live streams, only allow seeks that fall inside the current seekable range
+                            let minSeekable = 0;
+                            let maxSeekable = 0;
+                            try {
+                                if (this.seekable && this.seekable.length > 0) {
+                                    minSeekable = this.seekable.start(0);
+                                    maxSeekable = this.seekable.end(this.seekable.length - 1);
+                                }
+                            } catch (e) {}
+
+                            if (maxSeekable > 0) {
+                                if (val < minSeekable || val > maxSeekable + 2.0) {
+                                    console.log('[Sync Shield] Live Stream: swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (seekable: ' + minSeekable.toFixed(1) + 's - ' + maxSeekable.toFixed(1) + 's)');
+                                    return;
+                                }
+                            } else {
+                                // If seekable range is not loaded yet, only allow initial starts (val === 0) or swallow
+                                if (val > 0) {
+                                    console.log('[Sync Shield] Live Stream: swallowing early seek to ' + val.toFixed(1) + 's before seekable range is populated.');
+                                    return;
+                                }
+                            }
+                        } else {
+                            // VOD (video on demand): swallow seeks that are past the maximum seekable end + 2s
+                            let maxSeekable = 0;
+                            try {
+                                if (this.seekable && this.seekable.length > 0) {
+                                    maxSeekable = this.seekable.end(this.seekable.length - 1);
+                                }
+                            } catch (e) {}
+
+                            if (maxSeekable > 0 && val > maxSeekable + 2.0) {
+                                console.log('[Sync Shield] Swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (max seekable: ' + maxSeekable.toFixed(1) + 's)');
+                                return;
+                            }
                         }
+
                         return _origDescriptor.set.call(this, val);
                     },
                     configurable: true,
