@@ -879,6 +879,28 @@
                     // Server now sends apply_preset BEFORE trigger_video for non-audioOnly,
                     // so the bundle runs Te() first (storing preset in V), then starts the video.
                     // No interception needed here — the ordering fix on the server prevents the race.
+
+                    // ── Broadcaster sync: seek to startOffset for late-joining clients ──
+                    const startOffset = parseFloat(dec.startOffset) || 0;
+                    if (startOffset > 1 && !isLiveStream(dec)) {
+                        console.log('[WS Interceptor] Broadcaster sync: will seek to ' + startOffset.toFixed(1) + 's after video is ready.');
+                        const seekAttemptStart = Date.now();
+                        const MAX_SEEK_WAIT = 8000;
+                        const seekInterval = setInterval(function() {
+                            const v = window.tvVideoElement;
+                            if (Date.now() - seekAttemptStart > MAX_SEEK_WAIT) {
+                                clearInterval(seekInterval);
+                                console.warn('[WS Interceptor] Broadcaster sync: timed out seeking to ' + startOffset.toFixed(1) + 's');
+                                return;
+                            }
+                            if (!v || v.readyState < 1 || !isFinite(v.duration) || v.duration <= 0) return;
+                            const safeTarget = Math.min(startOffset, v.duration - 0.5);
+                            if (safeTarget <= 0) { clearInterval(seekInterval); return; }
+                            v.currentTime = safeTarget;
+                            clearInterval(seekInterval);
+                            console.log('[WS Interceptor] Broadcaster sync: seeked to ' + safeTarget.toFixed(1) + 's (duration=' + v.duration.toFixed(1) + 's)');
+                        }, 200);
+                    }
                 }
 
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
