@@ -834,7 +834,7 @@
                    d.isLive === 'true' ||
                    d.live === 'true' ||
                    isYtLive ||
-                   url.includes('.m3u8') ||
+                   (url.includes('.m3u8') && !url.includes('/assets/hls-')) ||
                    url.includes('hls_live') ||
                    url.includes('live=1');
         }
@@ -882,7 +882,7 @@
 
                     // ── Broadcaster sync: seek to startOffset for late-joining clients ──
                     const startOffset = parseFloat(dec.startOffset) || 0;
-                    if (startOffset > 1 && !isLiveStream(dec)) {
+                    if (startOffset > 1 && (!isLiveStream(dec) || dec.videoUrl.includes('/assets/hls-'))) {
                         console.log('[WS Interceptor] Broadcaster sync: will seek to ' + startOffset.toFixed(1) + 's after video is ready.');
                         const seekAttemptStart = Date.now();
                         const MAX_SEEK_WAIT = 8000;
