@@ -1,14 +1,14 @@
 let updateTV = null;
 
 function loadTVModel() {
-    // Create target lights for TV (simulating swaying lamp spotlight, positioned slightly forward to hit the front face)
-    const tvSpotlight = new THREE.SpotLight(0xffffff, 65.0, 30.0, Math.PI / 4.8, 0.6, 1.2);
-    tvSpotlight.position.set(0, 7.5, 4.0);
+    // Create soft ambient fill light for TV (disabled harsh spotlight to maintain dark moody void)
+    const tvSpotlight = new THREE.SpotLight(0xffffff, 0.0, 30.0, Math.PI / 3.5, 0.6, 1.2);
+    tvSpotlight.visible = false;
     scene.add(tvSpotlight);
     window.tvSpotlight = tvSpotlight;
     
     const tvSpotTarget = new THREE.Object3D();
-    tvSpotTarget.position.set(0, -0.7, 0); // Target the TV center
+    tvSpotTarget.position.set(0.0, -3.2, 9.5); // Target the TV center
     scene.add(tvSpotTarget);
     tvSpotlight.target = tvSpotTarget;
 
@@ -19,23 +19,25 @@ function loadTVModel() {
             window.tvProgress = 100;
             window.updateOverallProgress();
             window.tvGroup = tv.tvGroup;
+            window.tvCrtScreen = tv.crtScreen;
             window.tvBasePosition = tv.basePosition;
             window.tvInternalCabinetLight = tv.internalCabinetLight;
             
-            // Reposition TV base position under the monolith — submerged deeper into the water
-            tv.basePosition.set(0.31, -2.5, 0);
+            // Position TV downstream to the South and subtly shifted right (X = 0.7, Z = 11.5, Y = -3.3) submerged in the water
+            tv.basePosition.set(0.7, -3.3, 11.5);
             
-            // Scale the TV and its screen up to be bigger
-            tv.tvGroup.scale.setScalar(2.2 * (window.innerWidth < 768 ? 0.65 : 1.0));
+            // Scale the TV
+            tv.tvGroup.scale.setScalar(2.0 * (window.innerWidth < 768 ? 0.65 : 1.0));
             
-            // Face the TV straight forward and centered, with a slight Z tilt (hanging look)
-            tv.tvGroup.rotation.y = 0.0; 
-            tv.tvGroup.rotation.x = 0.0;
-            tv.tvGroup.rotation.z = 0.16;
+            // Orient TV pointing North, tilted upwards towards aerial camera with diagonal roll (one corner sunken deeper)
+            tv.tvGroup.rotation.x = -Math.PI / 2.05;
+            tv.tvGroup.rotation.y = 0.0;
+            tv.tvGroup.rotation.z = 0.22;
 
 
-            // Create a non-invasive pulsar PointLight for dynamic metallic reflections (matches white environment lights)
+            // Create a non-invasive pulsar PointLight (disabled to prevent harsh glare)
             const pulsarLight = new THREE.PointLight(0xffffff, 0.0, 5.0, 1.2);
+            pulsarLight.visible = false;
             scene.add(pulsarLight);
             window.tvPulsarLight = pulsarLight;
 
@@ -82,13 +84,28 @@ function loadTVModel() {
             window.tvCableMesh = cableMesh;
             window.tvCableCurve = cableCurve;
 
-            // PointLight to illuminate the bezel edges around the TV screen
+            // PointLight hovering in front of the screen to illuminate the TV bezel and chassis
             window.tvCrtLight = tv.crtLight;
-            const bezelLight = new THREE.PointLight(0xffffff, 4.5, 2.0, 1.5);
-            bezelLight.position.copy(tv.crtScreen.position);
-            bezelLight.position.z += 0.18; // Shift forward slightly so it shines onto the surrounding frame
+            if (tv.crtLight) {
+                tv.crtLight.visible = false;
+                tv.crtLight.intensity = 0.0;
+            }
+            if (tv.internalCabinetLight) {
+                tv.internalCabinetLight.visible = false;
+                tv.internalCabinetLight.intensity = 0.0;
+            }
+            
+            // Hover light slightly in front of the screen (+Z in screen local space) to illuminate plastic chassis
+            const bezelLight = new THREE.PointLight(0xaadcff, 3.5, 3.8, 1.2);
+            bezelLight.position.set(0, 1.3, 0.65);
             tv.tvGroup.add(bezelLight);
             window.tvBezelLight = bezelLight;
+
+            // Ambient fill light for tentacles around TV so their fleshy textures glow nicely
+            const tvTentacleLight = new THREE.PointLight(0x88bbff, 3.0, 12.0, 1.5);
+            tvTentacleLight.position.set(0, 1.4, 0);
+            tv.tvGroup.add(tvTentacleLight);
+            window.tvTentacleLight = tvTentacleLight;
 
             // Repositioning logic for pulsar (teleport to a new random angle/height around the TV)
             window.relocateTvPulsar = function() {

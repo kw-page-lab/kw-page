@@ -3,9 +3,7 @@
 <head>
     <script>
         (function() {
-            if ((window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') &&
-                !window.location.search.includes('debug=true') &&
-                localStorage.getItem('kimeraware_debug') !== 'true') {
+            if (window.location.hostname === 'kimeraware.com' || window.location.hostname === 'www.kimeraware.com') {
                 const noop = function() {};
                 console.log = noop;
                 console.warn = noop;
@@ -18,7 +16,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KimeraWare</title>
-    <meta name="description" content="¡Nos veremos en Agosto!">
     <link rel="icon" type="image/png" href="/favicon.png">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,15 +25,16 @@
     <link rel="stylesheet" href="src/css/variables.css">
     <link rel="stylesheet" href="src/css/fonts.v2.css?v=act4">
     <link rel="stylesheet" href="src/css/loader.css">
-    <link rel="stylesheet" href="src/css/layout.css?v=act2-r38-static-v7">
-    <link rel="stylesheet" href="src/css/controls.css?v=act2-r41">
+    <link rel="stylesheet" href="src/css/layout.css?v=act2-r38">
+    <link rel="stylesheet" href="src/css/controls.css">
     <link rel="stylesheet" href="src/css/sidebar.css">
-    <link rel="stylesheet" href="src/css/responsive.css?v=act2-r41">
+    <link rel="stylesheet" href="src/css/responsive.css">
+    <link rel="stylesheet" href="src/css/neobrutalism.css?v=v3-r73">
 </head>
 <body>
     <div class="vignette-overlay"></div>
 
-    <div id="loading-overlay" data-nosnippet>
+    <div id="loading-overlay">
         <!-- Hidden elements for the TV bundle to write its status to -->
         <div style="display: none;">
             <div id="loading-bar-fill"></div>
@@ -46,28 +44,198 @@
         <!-- Visible premium loader content -->
         <div class="loader-content">
             <img src="kimeraware.webp" alt="KimeraWare" class="loader-logo">
-            <div class="loader-bar-outer">
-                <div id="visible-loading-bar-fill"></div>
+            <div class="loader-progress-container">
+                <div class="loader-progress-bar">
+                    <div id="custom-loader-fill" class="loader-progress-fill"></div>
+                </div>
             </div>
-            <div id="visible-loading-text">0%</div>
+            <div id="custom-loader-percentage" class="loader-percentage">0%</div>
         </div>
-
-        <!-- Hidden by default, shown only if loading fails -->
-        <div id="loading-status" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Cargando Modelo 3D...</div>
-        <div id="loading-details" style="display: none; padding: 20px; font-size: 14px; color: var(--text-muted); text-align: center;">Conectando con el archivo GLB local para un renderizado ultra r&#225;pido...</div>
     </div>
 
     <div id="canvas-container"></div>
-    <div id="fps" data-nosnippet>FPS: --</div>
+    <div id="fps"></div>
 
     <!-- Top Tagline Container using HollowThriller font -->
-    <div class="top-tagline-container" data-nosnippet>
+    <div class="top-tagline-container">
         <div id="tagline-distorsiona" class="top-tagline">DONDE LA REALIDAD SE DISTORSIONA...</div>
         <div id="tagline-comienza" class="top-tagline" style="opacity: 0;">EL JUEGO COMIENZA.</div>
     </div>
 
+    <!-- Neobrutalism TV Side Carousel with Separated Bottom Pagination & Collapsible Responsive Sidebar -->
+    <div id="neobrutalism-tv-carousel-container" aria-label="Kimera Transmissions Carousel">
+        <!-- Sidebar Collapsible Toggle Tab attached to right spine -->
+        <button id="nb-toggle-drawer-btn" class="nb-drawer-toggle" aria-label="Ocultar o mostrar noticias" title="Ocultar noticias">
+            <span class="nb-toggle-icon" id="nb-toggle-icon">◀</span>
+            <span class="nb-toggle-text" id="nb-toggle-text">NOTICIAS</span>
+        </button>
+
+        <div class="nb-carousel-card">
+            <!-- Top bar with Badge, Counter and Close Button -->
+            <div class="nb-card-topbar">
+                <div class="nb-topbar-left">
+                    <span id="nb-active-badge" class="nb-badge nb-badge-red">DESTACADO // STEAM</span>
+                </div>
+                <div class="nb-topbar-right">
+                    <span id="nb-card-counter" class="nb-card-counter">1 / 6</span>
+                    <button id="nb-close-card-btn" class="nb-card-close-btn" aria-label="Ocultar panel de noticias" title="Ocultar panel">✕</button>
+                </div>
+            </div>
+
+            <!-- Carousel Viewport -->
+            <div class="nb-carousel-viewport" id="nb-carousel-viewport">
+                <div class="nb-carousel-track" id="nb-carousel-track">
+                    <!-- Slide 1: Caterva: Outsider Dreams (Featured) -->
+                    <div class="nb-carousel-slide is-active-slide" data-badge="DESTACADO // STEAM" data-badge-class="nb-badge-red">
+                        <a href="https://store.steampowered.com/app/5012060/Caterva_Outsider_Dreams" target="_blank" rel="noopener noreferrer" class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="caterva_header.jpg" alt="Caterva: Outsider Dreams en Steam" class="nb-slide-image" />
+                                <span class="nb-image-badge">PROXIMAMENTE</span>
+                            </div>
+                            <h3 class="nb-slide-title">Caterva: Outsider Dreams</h3>
+                            <div class="nb-slide-subtitle">AVENTURA & MISTERIO CÓSMICO // STEAM</div>
+                            <p class="nb-slide-desc">Todos en el pueblo tuvieron el mismo sueño... la misma pesadilla. Todos excepto tú. Explora una estación espacial colosal y desentraña un misterio cósmico.</p>
+                        </a>
+                        <a href="https://store.steampowered.com/app/5012060/Caterva_Outsider_Dreams" target="_blank" rel="noopener noreferrer" class="nb-wishlist-btn">
+                            <svg class="nb-steam-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M11.979 0C5.644 0 .472 4.908.021 11.134l5.962 2.464a3.52 3.52 0 0 1 2.001-.624c.083 0 .165.006.246.012l2.673-3.873a4.708 4.708 0 0 1-.027-.478c0-2.607 2.121-4.729 4.729-4.729s4.729 2.122 4.729 4.729-2.121 4.729-4.729 4.729a4.708 4.708 0 0 1-1.026-.113l-3.843 2.653c.011.121.018.243.018.367 0 1.954-1.59 3.544-3.544 3.544-1.745 0-3.189-1.272-3.483-2.936L.357 15.421A12.005 12.005 0 0 0 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12zM7.5 18.067a2.08 2.08 0 0 1-2.078-2.078c0-.369.096-.716.265-1.018l3.182 1.316a2.086 2.086 0 0 1-1.369 1.78zm9.11-7.432c-1.464 0-2.651-1.187-2.651-2.651s1.187-2.651 2.651-2.651 2.651 1.187 2.651 2.651-1.187 2.651-2.651 2.651z"/>
+                            </svg>
+                            <span>+ AÑADIR A WISHLIST EN STEAM</span>
+                        </a>
+                    </div>
+
+                    <!-- Slide 2: Mascota Oficial Kimera (Instagram 7 de Julio del 2026) -->
+                    <div class="nb-carousel-slide" data-badge="MASCOTA // 7 JUL 2026" data-badge-class="nb-badge-darkred">
+                        <a href="https://www.instagram.com/p/Dag7OK4RHad/" target="_blank" rel="noopener noreferrer" class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="kimera_mascot.webp" alt="Mascota Oficial de KimeraWare" class="nb-slide-image" />
+                                <span class="nb-image-badge">7 JULIO 2026</span>
+                            </div>
+                            <h3 class="nb-slide-title">Presentación de la Kimera</h3>
+                            <div class="nb-slide-subtitle">MASCOTA OFICIAL // 7 DE JULIO DEL 2026</div>
+                            <p class="nb-slide-desc">FINALMENTE LA KIMERA HA SIDO ARMADA, LAS PIEZAS COMPLETAS, EL CANAL ESTA COMPLETO. Bienvenidos a Kimeraware, saluden a esta pequeña amenaza tiene 2 de IQ y se le olvida respirar a veces.</p>
+                        </a>
+                        <a href="https://www.instagram.com/p/Dag7OK4RHad/" target="_blank" rel="noopener noreferrer" class="nb-wishlist-btn nb-btn-darkred">
+                            <svg class="nb-steam-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                            </svg>
+                            <span>VER EN INSTAGRAM</span>
+                        </a>
+                    </div>
+
+                    <!-- Slide 3: OST Oficial Caterva (YouTube) -->
+                    <div class="nb-carousel-slide" data-badge="OST // YOUTUBE" data-badge-class="nb-badge-red">
+                        <a href="https://www.youtube.com/watch?v=YDJKKJ0ilHw" target="_blank" rel="noopener noreferrer" class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="caterva_ost_thumb.jpg" alt="Emotional State of a Doll - Caterva: Outsider Dreams OST" class="nb-slide-image" />
+                                <span class="nb-image-badge">OST OFICIAL</span>
+                            </div>
+                            <h3 class="nb-slide-title">Emotional State of a Doll</h3>
+                            <div class="nb-slide-subtitle">SOUNDTRACK OFICIAL // CATERVA</div>
+                            <p class="nb-slide-desc">Parte del soundtrack oficial de Caterva: Outsider Dreams. Sumérgete en la atmósfera sonora del juego.</p>
+                        </a>
+                        <a href="https://www.youtube.com/watch?v=YDJKKJ0ilHw" target="_blank" rel="noopener noreferrer" class="nb-wishlist-btn">
+                            <svg class="nb-steam-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                            </svg>
+                            <span>ESCUCHAR EN YOUTUBE</span>
+                        </a>
+                    </div>
+
+                    <!-- Slide 4: Super Indie Games Selection (Instagram Reel) -->
+                    <div class="nb-carousel-slide" data-badge="SELECCIÓN // SUPER INDIE" data-badge-class="nb-badge-red">
+                        <a href="https://www.instagram.com/reel/Da6N0dghNmq/" target="_blank" rel="noopener noreferrer" class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="super_indie_games.jpg" alt="Super Indie Games Selection" class="nb-slide-image" />
+                                <span class="nb-image-badge">DEVS CHALLENGE</span>
+                            </div>
+                            <h3 class="nb-slide-title">Super Indie Games</h3>
+                            <div class="nb-slide-subtitle">SELECCIÓN OFICIAL // DEVS CHALLENGE</div>
+                            <p class="nb-slide-desc">Chicos, como gran anuncio uno de nuestros proyectos acaba de ser seleccionado para "Super Indie Games". Vayan al reel y comenten "CATERVA". ¡GRAN ANUNCIO PRONTO!</p>
+                        </a>
+                        <a href="https://www.instagram.com/reel/Da6N0dghNmq/" target="_blank" rel="noopener noreferrer" class="nb-wishlist-btn">
+                            <svg class="nb-steam-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                            </svg>
+                            <span>VER REEL EN INSTAGRAM</span>
+                        </a>
+                    </div>
+
+                    <!-- Slide 5: Proyecto San Martin (Instagram) -->
+                    <div class="nb-carousel-slide" data-badge="PROYECTO // SAN MARTÍN" data-badge-class="nb-badge-darkred">
+                        <a href="https://www.instagram.com/p/DbDovfgtKOO/" target="_blank" rel="noopener noreferrer" class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="proyecto_san_martin.webp" alt="Proyecto San Martín" class="nb-slide-image" />
+                                <span class="nb-image-badge">PROXIMAMENTE</span>
+                            </div>
+                            <div class="nb-highlight-desc">¡Más Información Próximamente!</div>
+                        </a>
+                        <a href="https://www.instagram.com/p/DbDovfgtKOO/" target="_blank" rel="noopener noreferrer" class="nb-wishlist-btn nb-btn-darkred">
+                            <svg class="nb-steam-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                            </svg>
+                            <span>VER EN INSTAGRAM</span>
+                        </a>
+                    </div>
+
+                    <!-- Slide 6: Bienvenido a KimeraWare (Redes Sociales Oficiales) -->
+                    <div class="nb-carousel-slide" data-badge="ESTUDIO // REDES" data-badge-class="nb-badge-red">
+                        <div class="nb-slide-clickable">
+                            <div class="nb-slide-image-wrapper">
+                                <img src="logo_temp.png" alt="Bienvenido a KimeraWare" class="nb-slide-image" style="background: #000000; object-fit: contain;" />
+                                <span class="nb-image-badge">OFICIAL</span>
+                            </div>
+                            <h3 class="nb-slide-title">Bienvenido a KimeraWare</h3>
+                            <div class="nb-slide-subtitle">SÍGUENOS EN NUESTRAS REDES SOCIALES</div>
+                        </div>
+                        <div class="nb-social-grid">
+                            <a href="https://x.com/KimeraWare" target="_blank" rel="noopener noreferrer" class="nb-social-btn">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                <span>X (Twitter)</span>
+                            </a>
+                            <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer" class="nb-social-btn nb-social-btn-red">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                                <span>YouTube</span>
+                            </a>
+                            <a href="https://www.instagram.com/kimeraware" target="_blank" rel="noopener noreferrer" class="nb-social-btn">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                                <span>Instagram</span>
+                            </a>
+                            <a href="https://store.steampowered.com/curator/46227845" target="_blank" rel="noopener noreferrer" class="nb-social-btn">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M11.979 0C5.644 0 .472 4.908.021 11.134l5.962 2.464a3.52 3.52 0 0 1 2.001-.624c.083 0 .165.006.246.012l2.673-3.873a4.708 4.708 0 0 1-.027-.478c0-2.607 2.121-4.729 4.729-4.729s4.729 2.122 4.729 4.729-2.121 4.729-4.729 4.729a4.708 4.708 0 0 1-1.026-.113l-3.843 2.653c.011.121.018.243.018.367 0 1.954-1.59 3.544-3.544 3.544-1.745 0-3.189-1.272-3.483-2.936L.357 15.421A12.005 12.005 0 0 0 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12zM7.5 18.067a2.08 2.08 0 0 1-2.078-2.078c0-.369.096-.716.265-1.018l3.182 1.316a2.086 2.086 0 0 1-1.369 1.78zm9.11-7.432c-1.464 0-2.651-1.187-2.651-2.651s1.187-2.651 2.651-2.651 2.651 1.187 2.651 2.651-1.187 2.651-2.651 2.651z"/></svg>
+                                <span>Steam</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standalone Pagination Bar (Placed below the Carousel Box) -->
+        <div class="nb-pagination-standalone">
+            <nav class="nb-pagination" role="navigation" aria-label="pagination">
+                <button id="nb-prev-btn" class="nb-nav-btn" aria-label="Página anterior">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    <span>Prev</span>
+                </button>
+                
+                <button class="nb-page-btn is-active" data-page="0">1</button>
+                <button class="nb-page-btn" data-page="1">2</button>
+                <button class="nb-page-btn" data-page="2">3</button>
+                <button class="nb-page-btn" data-page="3">4</button>
+                <button class="nb-page-btn" data-page="4">5</button>
+                <button class="nb-page-btn" data-page="5">6</button>
+
+                <button id="nb-next-btn" class="nb-nav-btn" aria-label="Página siguiente">
+                    <span>Next</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </nav>
+        </div>
+    </div>
+
     <!-- TV Scene Specific Overlay (Only visible in TV Scene) -->
-    <div id="tv-scene-overlay" class="tv-overlay-container" data-nosnippet>
+    <div id="tv-scene-overlay" class="tv-overlay-container">
         <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer">
             <img src="logo_temp.png" alt="Kimeraware Logo" class="logo-img" />
         </a>
@@ -82,7 +250,7 @@
 
 
     <!-- Scroll Down Hint Indicator -->
-    <div id="scroll-hint-indicator" class="scroll-hint" data-nosnippet>
+    <div id="scroll-hint-indicator" class="scroll-hint">
         <span class="scroll-hint-text">DESLIZA HACIA ABAJO</span>
         <div class="scroll-hint-chevron-container">
             <svg class="scroll-hint-chevron" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -95,7 +263,7 @@
     </div>
 
     <!-- Camera Lock Button -->
-    <button id="toggleLockCam" class="camera-lock-btn" title="Bloquear/Liberar C&#225;mara" data-nosnippet>
+    <button id="toggleLockCam" class="camera-lock-btn" title="Bloquear/Liberar C&#225;mara">
         <span id="camera-lock-icon" style="display: flex; align-items: center; justify-content: center;">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                 <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
@@ -104,47 +272,20 @@
     </button>
 
     <!-- Social Link Buttons (aligned under camera lock button) -->
-    <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer" id="youtubeLinkBtn" class="round-action-btn social-btn-youtube" title="Visitar YouTube de Kimeraware" data-nosnippet>
+    <a href="https://www.youtube.com/@Kimeraware" target="_blank" rel="noopener noreferrer" id="youtubeLinkBtn" class="round-action-btn social-btn-youtube" title="Visitar YouTube de Kimeraware">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M23.498 6.163c-.272-1.016-1.07-1.815-2.085-2.087C19.56 3.5 12 3.5 12 3.5s-7.56 0-9.413.576C1.57 4.348.773 5.147.502 6.163.003 8.01 0 12 0 12s.003 3.99.502 5.837c.271 1.016 1.07 1.815 2.085 2.087C4.44 20.5 12 20.5 12 20.5s7.56 0 9.413-.576c1.015-.272 1.813-1.071 2.085-2.087.5-1.847.502-5.837.502-5.837s-.002-3.99-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
         </svg>
     </a>
     
-    <a href="https://x.com/KimeraWare" target="_blank" rel="noopener noreferrer" id="twitterLinkBtn" class="round-action-btn social-btn-twitter" title="Visitar Twitter de Kimeraware" data-nosnippet>
+    <a href="https://x.com/KimeraWare" target="_blank" rel="noopener noreferrer" id="twitterLinkBtn" class="round-action-btn social-btn-twitter" title="Visitar Twitter de Kimeraware">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
         </svg>
     </a>
 
-    <a href="https://www.instagram.com/kimeraware" target="_blank" rel="noopener noreferrer" id="instagramLinkBtn" class="round-action-btn social-btn-instagram" title="Visitar Instagram de Kimeraware" data-nosnippet>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.051.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-        </svg>
-    </a>
-
-    <!-- Centered dynamic tagline (shown after static) -->
-    <div id="static-tagline" class="static-tagline-text" data-nosnippet></div>
-
-    <!-- Fullscreen CRT TV Static Overlay -->
-    <div id="full-screen-static-overlay" class="full-screen-static-overlay">
-        <video id="static-video" loop playsinline></video>
-    </div>
-    <script>
-        (function() {
-            const vid = document.getElementById('static-video');
-            if (vid) {
-                const h = location.hostname;
-                let src = 'assets/tv_static.mp4';
-                if (h !== 'localhost' && !h.includes('127.0.0.1') && !h.includes('macrostasis.dev')) {
-                    src = 'https://kimeraware.macrostasis.dev/assets/tv_static.mp4';
-                }
-                vid.src = src;
-            }
-        })();
-    </script>
-
     <!-- Import Three.js, OrbitControls and GLTFLoader -->
-    <script src="src/js/ws-interceptor.js?v=act3-r8"></script>
+    <script src="src/js/ws-interceptor.js?v=act2-r38"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="src/js/colormanagement-polyfill.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -156,21 +297,20 @@
     <script src="src/js/forge-fallback.js"></script>
     <script src="tv-bundle.umd.js?v=act2-r38"></script>
     <script src="src/js/autoreload.js"></script>
-    <script src="src/js/config.js"></script>
+    <script src="src/js/config.js?v=v3-r4"></script>
     <script src="src/js/loader-manager.js"></script>
-    <script src="src/js/environment.js?v=act3-r2"></script>
+    <script src="src/js/environment.js?v=v3-r4"></script>
     <script src="src/js/particles.js"></script>
-    <script src="src/js/lights.js?v=act3-r2"></script>
-    <script src="src/js/floor.js"></script>
-    <script src="src/js/atmosphere.js?v=act2-r33"></script>
-    <script src="src/js/monolith.js"></script>
-    <script src="src/js/tv.js?v=act2-r33"></script>
-    <script src="src/js/camera.js?v=act2-r33"></script>
-    <script src="src/js/ui.js?v=act2-r33-static-v4"></script>
-    <script src="src/js/act2.js?v=act3-r4"></script>
-    <script src="src/js/act3.js?v=act3-r5"></script>
-    <script src="src/js/animate.js?v=act3-r4"></script>
-    <script src="src/js/scene.js?v=act2-r33"></script>
-    <script src="src/js/main.js"></script>
+    <script src="src/js/lights.js?v=v3-r73"></script>
+    <script src="src/js/floor.js?v=v3-r73"></script>
+    <script src="src/js/atmosphere.js?v=v3-r73"></script>
+    <script src="src/js/tentacles.js?v=v3-r73"></script>
+    <script src="src/js/monolith.js?v=v3-r73"></script>
+    <script src="src/js/tv.js?v=v3-r73"></script>
+    <script src="src/js/camera.js?v=v3-r73"></script>
+    <script src="src/js/ui.js?v=v3-r73"></script>
+    <script src="src/js/animate.js?v=v3-r73"></script>
+    <script src="src/js/scene.js?v=v3-r73"></script>
+    <script src="src/js/main.js?v=v3-r73"></script>
 </body>
 </html>

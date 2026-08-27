@@ -53,6 +53,40 @@ window.addEventListener('keydown', resetIdleTimer, { passive: true });
 window.addEventListener('touchstart', resetIdleTimer, { passive: true });
 window.addEventListener('scroll', resetIdleTimer, { passive: true });
 
+// Water plane Y level
+const WATER_SURFACE_Y = -2.0;
+
+function injectUnderwaterShader(material) {
+    material.onBeforeCompile = (shader) => {
+        shader.uniforms.uWaterSurfaceY = { value: WATER_SURFACE_Y };
+        shader.vertexShader = `
+            varying vec3 vWorldPositionCustom;
+            ${shader.vertexShader}
+        `.replace(
+            '#include <worldpos_vertex>',
+            `#include <worldpos_vertex>
+            vWorldPositionCustom = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            `
+        );
+        shader.fragmentShader = `
+            uniform float uWaterSurfaceY;
+            varying vec3 vWorldPositionCustom;
+            ${shader.fragmentShader}
+        `.replace(
+            '#include <dithering_fragment>',
+            `#include <dithering_fragment>
+            // Underwater light absorption & tinting (darkens and gives deep murky tone underwater)
+            if (vWorldPositionCustom.y < uWaterSurfaceY) {
+                float depthBelowWater = uWaterSurfaceY - vWorldPositionCustom.y;
+                float absorbFactor = clamp(depthBelowWater * 1.8, 0.0, 0.92);
+                vec3 waterMurkColor = vec3(0.015, 0.03, 0.06);
+                gl_FragColor.rgb = mix(gl_FragColor.rgb * (1.0 - absorbFactor * 0.75), waterMurkColor, absorbFactor * 0.7);
+            }
+            `
+        );
+    };
+}
+
 // --- QUALITY MATERIALS (default) ---
 // MeshStandardMaterial: 1 render pass, much cheaper than Physical/clearcoat
 const standardRed = new THREE.MeshStandardMaterial({
@@ -64,6 +98,8 @@ const standardRed = new THREE.MeshStandardMaterial({
     side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
 });
+injectUnderwaterShader(standardRed);
+
 const standardWhite = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     emissive: 0xffffff,
@@ -72,12 +108,15 @@ const standardWhite = new THREE.MeshStandardMaterial({
     metalness: 0.0,
     side: THREE.DoubleSide
 });
+injectUnderwaterShader(standardWhite);
+
 const standardBlack = new THREE.MeshStandardMaterial({
     color: 0x0c0b0a,
     roughness: 0.55,
     metalness: 0.15,
     side: THREE.DoubleSide
 });
+injectUnderwaterShader(standardBlack);
 
 // --- PERFORMANCE MATERIALS (High Performance Mode toggle) ---
 const lambertRed = new THREE.MeshLambertMaterial({

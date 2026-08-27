@@ -2,27 +2,6 @@
 // Strategy: audioOnly uses a SEPARATE <audio> element completely outside TV bundle.
 // TV bundle never enters video mode during audioOnly → zero texture leaks possible.
 (function() {
-    // ── Client-side debug logging to server ──────────────────────────────────
-    function sendDebugLog(type, msg) {
-        fetch('/log_debug', {
-            method: 'POST',
-            body: JSON.stringify({ type, msg, timestamp: Date.now(), url: location.href })
-        }).catch(() => {});
-    }
-    const _origError = console.error;
-    console.error = function(...args) {
-        _origError.apply(console, args);
-        sendDebugLog('ERROR', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-    };
-    const _origWarn = console.warn;
-    console.warn = function(...args) {
-        _origWarn.apply(console, args);
-        sendDebugLog('WARN', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-    };
-    window.addEventListener('error', function(e) {
-        sendDebugLog('UNCAUGHT', e.message + ' at ' + e.filename + ':' + e.lineno);
-    });
-
     window.wsConnected = false;
     window.wsProgress  = 0;
 
@@ -224,11 +203,10 @@
         lockUniform(m.uniforms, 'uChildVisibility', 0);
         lockUniform(m.uniforms, 'uTexture', tex);
         lockUniform(m.uniforms, 'uTextureText', null);
-        lockUniform(m.uniforms, 'uPowerOff', 0);
     }
     function unlockAct2Uniforms(m) {
         if (!m || !m.uniforms) return;
-        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText', 'uPowerOff'].forEach(k => unlockUniform(m.uniforms, k));
+        ['uScaleX', 'uScaleY', 'uIsVideo', 'uChildVisibility', 'uTexture', 'uTextureText'].forEach(k => unlockUniform(m.uniforms, k));
     }
 
     let _blackTex = null;
@@ -255,93 +233,12 @@
     }
 
 
-    // ── Intercept video element creation for pause/resume tracking and Sync Shield ────────────
+    // ── Intercept video element creation for pause/resume tracking ────────────
     const _origCE = document.createElement.bind(document);
     document.createElement = function(tag, opts) {
         const el = _origCE(tag, opts);
         if (typeof tag === 'string' && tag.toLowerCase() === 'video') {
-            if (!window.creatingAct3Video && !el.dataset.isAct3Video) {
-                window.tvVideoElement = el;
-            }
-
-            // Block play() calls on the main video element during an active ACT
-            const _origPlay = el.play;
-            el.play = function() {
-                if ((window.actCurrentlyActive || window.act3Active) && this === window.actPausedVideoElement) {
-                    console.log('[WS Interceptor] Blocking play() call on video element during active ACT.');
-                    return Promise.resolve();
-                }
-                return _origPlay.apply(this, arguments);
-            };
-
-            // Protect video element from out-of-bounds HLS seeking (Sync Shield)
-            const _origDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
-            if (_origDescriptor && _origDescriptor.set) {
-                Object.defineProperty(el, 'currentTime', {
-                    get: _origDescriptor.get,
-                    set: function(val) {
-                        const isLive = window._kwActiveVideoOverride && 
-                                       (window._kwActiveVideoOverride.isLive === true || 
-                                        window._kwActiveVideoOverride.live === true || 
-                                        window._kwActiveVideoOverride.isLive === 'true' || 
-                                        window._kwActiveVideoOverride.live === 'true' || 
-                                        String(window._kwActiveVideoOverride.videoUrl).includes('wNJPvFoGalM') || 
-                                        String(window._kwActiveVideoOverride.videoUrl).includes('hls-wNJPvFoGalM'));
-                        const isHlsLive = isLive || 
-                                          (this.src && (this.src.includes('wNJPvFoGalM') || this.src.includes('hls_live') || this.src.includes('live=1')));
-
-                        if (isHlsLive) {
-                            // BLOCK all seeks that are not initiated internally by Hls.js
-                            const stack = new Error().stack || '';
-                            const isFromHls = stack.includes('hls.js') || stack.includes('hls.min.js');
-                            if (!isFromHls) {
-                                console.log('[Sync Shield] Live Stream: swallowing manual/sync/drift seek to ' + val.toFixed(1) + 's');
-                                return;
-                            }
-
-                            // For live streams, only allow seeks that fall inside the current seekable range
-                            let minSeekable = 0;
-                            let maxSeekable = 0;
-                            try {
-                                if (this.seekable && this.seekable.length > 0) {
-                                    minSeekable = this.seekable.start(0);
-                                    maxSeekable = this.seekable.end(this.seekable.length - 1);
-                                }
-                            } catch (e) {}
-
-                            if (maxSeekable > 0) {
-                                if (val < minSeekable || val > maxSeekable + 2.0) {
-                                    console.log('[Sync Shield] Live Stream: swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (seekable: ' + minSeekable.toFixed(1) + 's - ' + maxSeekable.toFixed(1) + 's)');
-                                    return;
-                                }
-                            } else {
-                                // If seekable range is not loaded yet, only allow initial starts (val === 0) or swallow
-                                if (val > 0) {
-                                    console.log('[Sync Shield] Live Stream: swallowing early seek to ' + val.toFixed(1) + 's before seekable range is populated.');
-                                    return;
-                                }
-                            }
-                        } else {
-                            // VOD (video on demand): swallow seeks that are past the maximum seekable end + 2s
-                            let maxSeekable = 0;
-                            try {
-                                if (this.seekable && this.seekable.length > 0) {
-                                    maxSeekable = this.seekable.end(this.seekable.length - 1);
-                                }
-                            } catch (e) {}
-
-                            if (maxSeekable > 0 && val > maxSeekable + 2.0) {
-                                console.log('[Sync Shield] Swallowing out-of-bounds seek to ' + val.toFixed(1) + 's (max seekable: ' + maxSeekable.toFixed(1) + 's)');
-                                return;
-                            }
-                        }
-
-                        return _origDescriptor.set.call(this, val);
-                    },
-                    configurable: true,
-                    enumerable: true
-                });
-            }
+            window.tvVideoElement = el;
         }
         return el;
     };
@@ -463,82 +360,12 @@
                                 }
                                 m.needsUpdate = true;
                             }
-                        } else if (_act2UniformsLocked && !window.act3Active) {
+                        } else if (_act2UniformsLocked) {
                             // Safety: if sequence stopped unexpectedly, unlock
                             const m = window._kwMat;
                             unlockAct2Uniforms(m);
                             _act2UniformsLocked = false;
                             console.log('[WS Interceptor] ACT2: uniforms unlocked (safety cleanup).');
-                        }
-
-                        // ── ACT3 TV override ─────────────────────────────────────────────────
-                        // Three states driven by flags set in act3.js each frame:
-                        //   act3TvBlack   → black texture on CRT (phases 0, 4, pre-fade)
-                        //   act3TvStatic  → static noise on CRT  (phases 1 and 3)
-                        //   act3TvTexture → canvas-blended video  (fade-in during phase 2)
-                        const now = Date.now();
-                        const isRestoring = !window.act3Active && _act2UniformsLocked && window.act3RestoredTime && (now - window.act3RestoredTime < 1500);
-
-                        if ((window.act3Active || isRestoring) && !window.act2VisualSequenceActive) {
-                            const m3 = window._kwMat;
-                            if (m3 && m3.uniforms) {
-                                let tex3;
-                                if (isRestoring) {
-                                    tex3 = getBlackTex();
-                                } else if (window.act3TvTexture) {
-                                    tex3 = window.act3TvTexture;
-                                } else if (window.act3TvBlack) {
-                                    tex3 = getBlackTex();
-                                } else if (window.act3TvStatic) {
-                                    tex3 = updateStaticNoise();
-                                }
-                                if (tex3) {
-                                    if (!_act2UniformsLocked) {
-                                        lockAct2Uniforms(m3, tex3);
-                                        _act2UniformsLocked = true;
-                                        console.log('[WS Interceptor] ACT3: TV uniforms locked.');
-                                    } else {
-                                        setLockedUniformValue('uTexture', tex3);
-                                        setLockedUniformValue('uTextureText', getBlankTextTex());
-                                    }
-
-                                    // Dynamic uIsVideo: 1 during the actual video phase, 0 during static/black
-                                    if (m3.uniforms.uIsVideo && m3.uniforms.uIsVideo.__kwLocked) {
-                                        setLockedUniformValue('uIsVideo', (!isRestoring && window.act3TvTexture) ? 1 : 0);
-                                    }
-
-                                    // Dynamic uPowerOff: 1 during black/restoring phases, 0 during static/video
-                                    if (m3.uniforms.uPowerOff && m3.uniforms.uPowerOff.__kwLocked) {
-                                        setLockedUniformValue('uPowerOff', (isRestoring || window.act3TvBlack) ? 1 : 0);
-                                    }
-
-                                    m3.needsUpdate = true;
-                                }
-                            }
-
-                            // Dynamic TV light intensities for PowerOff visual sync
-                            if (isRestoring || window.act3TvBlack) {
-                                if (window.tvCrtLight) window.tvCrtLight.intensity = 0;
-                                if (window.tvBezelLight) window.tvBezelLight.intensity = 0;
-                            } else {
-                                if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5 * 1.5;
-                            }
-                        } else if (!window.act3Active && _act2UniformsLocked && !window.act2VisualSequenceActive) {
-                            const m3 = window._kwMat;
-                            unlockAct2Uniforms(m3);
-                            _act2UniformsLocked = false;
-                            if (m3 && m3.uniforms) {
-                                if (m3.uniforms.uTexture)         m3.uniforms.uTexture.value         = window._kwOrigTex;
-                                if (m3.uniforms.uTextureText)     m3.uniforms.uTextureText.value     = window._kwOrigTextTex;
-                                if (m3.uniforms.uChildVisibility) m3.uniforms.uChildVisibility.value = window._kwOrigChildVis;
-                                if (m3.uniforms.uScaleX)          m3.uniforms.uScaleX.value          = 1;
-                                if (m3.uniforms.uScaleY)          m3.uniforms.uScaleY.value          = 1;
-                                if (m3.uniforms.uIsVideo)         m3.uniforms.uIsVideo.value         = window._kwOrigIsVid;
-                                if (m3.uniforms.uPowerOff)         m3.uniforms.uPowerOff.value         = 0;
-                                m3.needsUpdate = true;
-                            }
-                            if (window.tvBezelLight) window.tvBezelLight.intensity = 4.5 * 1.5;
-                            console.log('[WS Interceptor] ACT3: TV uniforms restored.');
                         }
 
                         // ── Short video portrait pillarbox ─────────────────────────────────
@@ -601,7 +428,6 @@
         } catch(e) { console.error('[WS] clientId error:', e); }
 
         const ws = new _OrigWS(modUrl, protocols);
-        let wsEventChain = Promise.resolve();
         ws.addEventListener('open', () => {
             window.wsConnected = true; window.wsProgress = 100;
             if (typeof window.updateOverallProgress === 'function') window.updateOverallProgress();
@@ -629,27 +455,6 @@
                 const pt  = await crypto.subtle.decrypt({name:'AES-GCM',iv}, await _getKey(), buf);
                 return JSON.parse(new TextDecoder().decode(pt));
             } catch { try { return JSON.parse(raw); } catch(e) { throw e; } }
-        }
-
-        async function getDecryptedEventData(event) {
-            if (event.__decryptedData !== undefined) {
-                return event.__decryptedData;
-            }
-            try {
-                const dec = await decrypt(event.data);
-                event.__decryptedData = dec;
-                if (dec) {
-                    const { block } = processMsg(dec);
-                    event.__blocked = block;
-                } else {
-                    event.__blocked = false;
-                }
-            } catch(e) {
-                event.__decryptedData = null;
-                event.__blocked = false;
-                console.error('[WS Interceptor] Decryption failed:', e);
-            }
-            return event.__decryptedData;
         }
 
         // ── Texture loader ────────────────────────────────────────────────────
@@ -754,7 +559,7 @@
                 _startAudioPlayer(dec.videoUrl || '', volPct, startElapsed);
 
                 // Preload ACT2 image
-                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 8;
+                window.act2ClampThreshold = dec.clampThreshold != null ? parseInt(dec.clampThreshold) : 0;
                 const imgUrl = dec.imageUrl || dec.imageData || dec.mainImageData;
                 window.lastAct2ImageUrl = imgUrl || null;
                 if (imgUrl && !window.act2ImageTexture) {
@@ -825,20 +630,6 @@
             console.log('[WS Interceptor] ACT2 visual sequence ACTIVE. Image ready:', !!window.act2ImageTexture);
         }
 
-        function isLiveStream(d) {
-            if (!d) return false;
-            const url = String(d.videoUrl || '');
-            const isYtLive = url.includes('wNJPvFoGalM');
-            return d.isLive === true ||
-                   d.live === true ||
-                   d.isLive === 'true' ||
-                   d.live === 'true' ||
-                   isYtLive ||
-                   (url.includes('.m3u8') && !url.includes('/assets/hls-')) ||
-                   url.includes('hls_live') ||
-                   url.includes('live=1');
-        }
-
         // ── processMsg ───────────────────────────────────────────────────────
         // Returns { block: bool, modified: bool }
         function processMsg(dec) {
@@ -855,19 +646,6 @@
                     console.log('[WS Interceptor] Blocked audioOnly trigger_video from TV bundle.');
                 } else if (dec.type === 'trigger_video') {
                     handleAudioOnly(dec);
-                    
-                    if (isLiveStream(dec)) {
-                        dec.isLive = true;
-                        dec.live = true;
-                        dec.originalDuration = Infinity;
-                        dec.duration = Infinity;
-                        dec.startTime = Date.now();
-                        modified = true;
-                        console.log('[WS Interceptor] Live stream trigger detected: forcing infinite duration and current startTime.');
-                    }
-                    
-                    // Store active override for reloading on resume
-                    window._kwActiveVideoOverride = JSON.parse(JSON.stringify(dec));
                     // Detect YouTube Short → activate portrait pillarbox
                     const newIsShort = dec.isShort === true || dec.isShort === 'true' ||
                         !!(dec.videoUrl && dec.videoUrl.match(/\/shorts\/[a-zA-Z0-9_-]{11}/));
@@ -879,28 +657,6 @@
                     // Server now sends apply_preset BEFORE trigger_video for non-audioOnly,
                     // so the bundle runs Te() first (storing preset in V), then starts the video.
                     // No interception needed here — the ordering fix on the server prevents the race.
-
-                    // ── Broadcaster sync: seek to startOffset for late-joining clients ──
-                    const startOffset = parseFloat(dec.startOffset) || 0;
-                    if (startOffset > 1 && (!isLiveStream(dec) || dec.videoUrl.includes('/assets/hls-'))) {
-                        console.log('[WS Interceptor] Broadcaster sync: will seek to ' + startOffset.toFixed(1) + 's after video is ready.');
-                        const seekAttemptStart = Date.now();
-                        const MAX_SEEK_WAIT = 8000;
-                        const seekInterval = setInterval(function() {
-                            const v = window.tvVideoElement;
-                            if (Date.now() - seekAttemptStart > MAX_SEEK_WAIT) {
-                                clearInterval(seekInterval);
-                                console.warn('[WS Interceptor] Broadcaster sync: timed out seeking to ' + startOffset.toFixed(1) + 's');
-                                return;
-                            }
-                            if (!v || v.readyState < 1 || !isFinite(v.duration) || v.duration <= 0) return;
-                            const safeTarget = Math.min(startOffset, v.duration - 0.5);
-                            if (safeTarget <= 0) { clearInterval(seekInterval); return; }
-                            v.currentTime = safeTarget;
-                            clearInterval(seekInterval);
-                            console.log('[WS Interceptor] Broadcaster sync: seeked to ' + safeTarget.toFixed(1) + 's (duration=' + v.duration.toFixed(1) + 's)');
-                        }, 200);
-                    }
                 }
 
                 // Let apply_preset reach the TV bundle. ACT presets must update the TV
@@ -916,11 +672,6 @@
                     console.log('[WS Interceptor] ACT2 preset arrived before audioOnly — forcing black texture (anti-SEÑAL-PENDIENTE).');
                 }
 
-            } else if (dec.type === 'video_sync') {
-                if (window._kwActiveVideoOverride && isLiveStream(window._kwActiveVideoOverride)) {
-                    block = true;
-                    console.log('[WS Interceptor] Blocked video_sync message for HLS livestream to prevent drift seeks.');
-                }
             } else if (dec.type === 'reset') {
                 _stopAudioPlayer();
                 window.audioOnlyActive          = false;
@@ -931,7 +682,6 @@
                 window.act2ClampThreshold        = 0;
                 window.actCurrentlyActive       = false;
                 window.actPausedVideoInfo       = null;
-                window.actPausedVideoElement    = null;
                 window.shortVideoActive         = false;
             }
             return { block, modified };
@@ -943,7 +693,6 @@
             if (window.actCurrentlyActive && window.actActiveId === id) return;
             window.actCurrentlyActive = true; window.actActiveId = id;
             const v = window.tvVideoElement;
-            window.actPausedVideoElement = v;
             // Capture video state: track even if paused (auto-play may have been blocked)
             if (v && v.src) {
                 const live = !isFinite(v.duration) || v.duration === Infinity || v.duration === 0;
@@ -961,35 +710,21 @@
             // Accept any id if actCurrentlyActive — handles stale id mismatches
             if (!window.actCurrentlyActive) return;
             window.actCurrentlyActive = false; window.actActiveId = null;
-            window.actPausedVideoElement = null;
             const i = window.actPausedVideoInfo; window.actPausedVideoInfo = null;
             if (!i) return;
             const v = window.tvVideoElement; if (!v) return;
             // Restore volume
             try { v.volume = i.vol; } catch(e) {}
             if (i.live) {
-                // Live: reload the stream cleanly at the live edge by simulated reset + trigger_video
-                if (window._kwActiveVideoOverride && window._kwActiveWs) {
-                    console.log(`[WS Interceptor] ACT${id}: reloading live stream at the live edge (reset + trigger_video).`);
-                    
-                    // 1. Send simulated reset to clear the internal Je URL cache
-                    window._kwActiveWs.dispatchEvent(new MessageEvent('message', {
-                        data: JSON.stringify({ type: 'reset', _simulated: true })
-                    }));
-                    
-                    // 2. Send simulated trigger_video to reload Hls.js player
-                    const triggerData = {
-                        ...window._kwActiveVideoOverride,
-                        startTime: Date.now(),
-                        _simulated: true
-                    };
-                    window._kwActiveWs.dispatchEvent(new MessageEvent('message', {
-                        data: JSON.stringify(triggerData)
-                    }));
-                } else {
-                    if (v.paused) v.play().catch(()=>{});
-                    console.log(`[WS Interceptor] ACT${id}: live stream resumed (no reload state).`);
-                }
+                // Live: sync to live edge
+                try {
+                    if (v.seekable && v.seekable.length > 0) {
+                        const edge = v.seekable.end(v.seekable.length - 1);
+                        if (isFinite(edge) && edge > 0) v.currentTime = Math.max(0, edge - 1.5);
+                    }
+                } catch(e) {}
+                if (v.paused) v.play().catch(()=>{});
+                console.log(`[WS Interceptor] ACT${id}: live stream resynced to live edge.`);
             } else {
                 // VOD: resume at exact captured timestamp
                 try {
@@ -1003,26 +738,13 @@
 
         // ── Wrap a listener ───────────────────────────────────────────────────
         function wrap(listener) {
-            return function(event) {
-                wsEventChain = wsEventChain.then(async () => {
-                    try {
-                        await getDecryptedEventData(event);
-                        if (event.__blocked) return;
-                        listener.call(this, event);
-                    } catch(e) { console.error('[WS Interceptor] Error in wrapped listener:', e); }
-                });
-            };
-        }
-
-        // ── Wrap the raw state machine listener to preserve ordering without blocking ──
-        function wrapRaw(listener) {
-            return function(event) {
-                wsEventChain = wsEventChain.then(async () => {
-                    try {
-                        await getDecryptedEventData(event);
-                        await listener(event);
-                    } catch(e) { console.error('[WS Interceptor] Error in raw listener:', e); }
-                });
+            return async function(event) {
+                try {
+                    const dec = await decrypt(event.data);
+                    const { block } = processMsg(dec);
+                    if (block) return;
+                } catch(e) { console.error('[WS Interceptor]', e); }
+                return listener.call(this, event);
             };
         }
 
@@ -1057,20 +779,22 @@
                 t[p] = v; return true;
             }
         });
-        window._kwActiveWs = proxy; // Save global reference
 
         // ── Raw listener: ACT state machine ──────────────────────────────────
-        ws.addEventListener('message', wrapRaw(async (event) => {
+        ws.addEventListener('message', async (event) => {
             try {
-                const d = event.__decryptedData;
-                if (!d || d._simulated) return;
+                let d;
+                if (typeof event.data === 'string' && event.data.startsWith('{'))
+                    d = JSON.parse(event.data);
+                else d = await decrypt(event.data);
+                if (!d) return;
 
                 // ── Dynamic tagline updates ──
-                if (d.tagline1 !== undefined && d.tagline1 !== null) {
+                if (d.tagline1 !== undefined) {
                     const el = document.getElementById('tagline-distorsiona');
                     if (el) el.innerText = d.tagline1;
                 }
-                if (d.tagline2 !== undefined && d.tagline2 !== null) {
+                if (d.tagline2 !== undefined) {
                     const el = document.getElementById('tagline-comienza');
                     if (el) el.innerText = d.tagline2;
                 }
@@ -1111,8 +835,6 @@
                         } else {
                             window.pendingAct1State = { active: false };
                         }
-                        // Act3: deactivate if act2 starts
-                        if (typeof window.setAct3 === 'function' && window.act3Active) window.setAct3(false);
                         // Activate visual sequence if audioOnly is already running
                         if (window.audioOnlyActive && !window.act2VisualSequenceActive) {
                             activateAct2Visual(d.mainImageData || window.lastAct2ImageUrl);
@@ -1122,23 +844,6 @@
                             window.setAct2(false);
                         } else {
                             window.pendingAct2State = { active: false };
-                        }
-                    }
-
-                    // ── ACT3 ──────────────────────────────────────────────────────────────
-                    if (pid === 'act3' || d.act3 === true) {
-                        if (typeof window.setAct3 === 'function') {
-                            window.setAct3(true, d.elapsedSeconds || 0, d.startTime || null);
-                        }
-                        // Deactivate act1 and act2
-                        if (typeof window.setAct1 === 'function') window.setAct1(false);
-                        else window.pendingAct1State = { active: false };
-                        if (typeof window.setAct2 === 'function') window.setAct2(false);
-                        else window.pendingAct2State = { active: false };
-                    } else if (d.type === 'apply_preset' && pid !== 'act3') {
-                        // Any non-act3 preset stops act3
-                        if (typeof window.setAct3 === 'function' && window.act3Active) {
-                            window.setAct3(false);
                         }
                     }
 
@@ -1153,14 +858,11 @@
                     } else {
                         window.pendingAct2State = { active: false };
                     }
-                    if (typeof window.setAct3 === 'function' && window.act3Active) {
-                        window.setAct3(false);
-                    }
                     window.lastAppliedPreset = null;
                     if (window.actCurrentlyActive) onActOff(window.actActiveId);
                 }
             } catch(e) { /* ignore */ }
-        }));
+        });
 
         return proxy;
     };

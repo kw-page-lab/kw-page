@@ -1,0 +1,657 @@
+/* ==========================================================================
+   NEOBRUTALISM CAROUSEL & PAGINATION (TV Scene Left Overlay)
+   Palette: Dominant Red (#f60101), White (#ffffff), Dark Red (#850101 / #5a0408)
+   Neobrutalism: Bold 3.5px borders, hard offset shadows, high tactile feedback
+   Responsive Collapsible Drawer specifically for Mobile viewports
+   ========================================================================== */
+
+#neobrutalism-tv-carousel-container {
+    --nb-left: clamp(14px, 3.2vw, 44px);
+    position: fixed;
+    left: var(--nb-left);
+    top: 50%;
+    transform: translateY(-50%) translateX(-25px);
+    width: 410px;
+    max-width: calc(100vw - 32px);
+    z-index: 35;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.38s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.32s ease;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* When the TV Scene is in view and active */
+#neobrutalism-tv-carousel-container.is-tv-visible {
+    transform: translateY(-50%) translateX(0);
+}
+
+/* On Desktop: Drawer toggle button is NOT shown */
+.nb-drawer-toggle {
+    display: none !important;
+}
+
+.nb-card-close-btn {
+    display: none !important;
+}
+
+/* ================= MAIN CAROUSEL CARD ================= */
+.nb-carousel-card {
+    background: #ffffff;
+    border: 3.5px solid #000000;
+    border-radius: 14px;
+    box-shadow: 7px 7px 0px #000000;
+    padding: 16px 18px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* Top Mini Header Bar */
+.nb-card-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 2.5px solid #000000;
+}
+
+.nb-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nb-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 2px solid #000000;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    box-shadow: 2.5px 2.5px 0px #000000;
+}
+
+/* Red & Dark Red Badges */
+.nb-badge-red     { background: #f60101; color: #ffffff; }
+.nb-badge-darkred { background: #850101; color: #ffffff; }
+.nb-badge-white   { background: #ffffff; color: #850101; border-color: #850101; }
+
+.nb-card-counter {
+    font-size: 12px;
+    font-weight: 900;
+    color: #850101;
+    background: #ffffff;
+    padding: 3px 8px;
+    border: 2px solid #000000;
+    border-radius: 6px;
+    box-shadow: 2px 2px 0px #000000;
+    letter-spacing: 0.5px;
+}
+
+/* Carousel Viewport & Track: Strict containment to prevent ANY peeking */
+.nb-carousel-viewport {
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+    border-radius: 8px;
+    contain: paint;
+}
+
+.nb-carousel-track {
+    display: flex;
+    transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
+    will-change: transform;
+    width: 100%;
+}
+
+.nb-carousel-slide {
+    flex: 0 0 100%;
+    min-width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 2px 4px 4px 4px;
+    opacity: 0.3;
+    transition: opacity 0.28s ease;
+    pointer-events: none;
+}
+
+.nb-carousel-slide.is-active-slide {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.nb-slide-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+/* Full Width Image Banner */
+.nb-slide-image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    border: 2.5px solid #000000;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 3.5px 3.5px 0px #000000;
+    margin-bottom: 4px;
+    background: #000000;
+    box-sizing: border-box;
+}
+
+.nb-slide-image {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center;
+    transition: transform 0.25s ease;
+}
+
+.nb-slide-image-wrapper:hover .nb-slide-image {
+    transform: scale(1.03);
+}
+
+.nb-image-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: #f60101;
+    color: #ffffff;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: 0.6px;
+    padding: 3px 8px;
+    border: 1.5px solid #000000;
+    border-radius: 4px;
+    box-shadow: 2px 2px 0px #000000;
+}
+
+.nb-slide-title {
+    font-size: 19px;
+    font-weight: 900;
+    color: #000000;
+    letter-spacing: -0.4px;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.nb-slide-subtitle {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #f60101; /* Dominant Vibrant Red */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: -2px;
+}
+
+.nb-slide-desc {
+    font-size: 13px;
+    line-height: 1.45;
+    color: #24292f;
+    font-weight: 500;
+    margin: 2px 0 0 0;
+}
+
+.nb-highlight-desc {
+    font-size: 16px;
+    font-weight: 900;
+    color: #f60101;
+    letter-spacing: 0.2px;
+    text-align: center;
+    padding: 12px 6px;
+    background: #fff5f5;
+    border: 2px dashed #f60101;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.nb-slide-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 2px dashed #e2e8f0;
+}
+
+.nb-tag {
+    font-size: 11px;
+    font-weight: 800;
+    color: #850101;
+    background: #fff0f0;
+    padding: 3px 8px;
+    border: 1.5px solid #850101;
+    border-radius: 5px;
+    letter-spacing: 0.5px;
+}
+
+.nb-coord {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #64748b;
+    letter-spacing: 0.5px;
+}
+
+/* ================= CALL TO ACTION BUTTON ================= */
+.nb-wishlist-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    background: #f60101;
+    color: #ffffff !important;
+    text-decoration: none;
+    border: 2.5px solid #000000;
+    border-radius: 8px;
+    padding: 9.5px 14px;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    box-shadow: 3.5px 3.5px 0px #000000;
+    margin-top: 4px;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease;
+    user-select: none;
+}
+
+.nb-wishlist-btn:hover {
+    background: #850101; /* Darker Red on hover */
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 2px 2px 0px #000000;
+}
+
+.nb-wishlist-btn:active {
+    transform: translate(3.5px, 3.5px);
+    box-shadow: 0px 0px 0px #000000;
+}
+
+.nb-btn-darkred {
+    background: #850101;
+}
+
+.nb-btn-darkred:hover {
+    background: #5a0408;
+}
+
+.nb-steam-icon {
+    flex-shrink: 0;
+}
+
+/* Clickable slide wrapper */
+.nb-slide-clickable {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    width: 100%;
+}
+
+/* ================= SOCIAL MEDIA BUTTONS GRID (SLIDE 6) ================= */
+.nb-social-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.nb-social-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #ffffff;
+    color: #000000 !important;
+    text-decoration: none;
+    border: 2.5px solid #000000;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 3px 3px 0px #000000;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s ease, color 0.15s ease;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.nb-social-btn:hover {
+    background: #f60101;
+    color: #ffffff !important;
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 1.5px 1.5px 0px #000000;
+}
+
+.nb-social-btn:active {
+    transform: translate(3px, 3px);
+    box-shadow: 0px 0px 0px #000000;
+}
+
+.nb-social-btn-red {
+    background: #f60101;
+    color: #ffffff !important;
+}
+
+.nb-social-btn-red:hover {
+    background: #850101;
+}
+
+/* ================= SEPARATED STANDALONE PAGINATION (DEBAJO DE LA CAJA) ================= */
+.nb-pagination-standalone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.nb-pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 3px solid #000000;
+    border-radius: 10px;
+    box-shadow: 5px 5px 0px #000000;
+    padding: 6px 8px;
+    box-sizing: border-box;
+}
+
+/* Prev & Next Buttons: Vibrant Red with White Text */
+.nb-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: #f60101;
+    color: #ffffff;
+    border: 2px solid #000000;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 2.5px 2.5px 0px #000000;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s ease;
+    user-select: none;
+}
+
+.nb-nav-btn:hover:not(:disabled) {
+    background: #850101; /* Dark Red hover */
+    transform: translate(1px, 1px);
+    box-shadow: 1.5px 1.5px 0px #000000;
+}
+
+.nb-nav-btn:active:not(:disabled) {
+    transform: translate(2.5px, 2.5px);
+    box-shadow: 0px 0px 0px #000000;
+}
+
+.nb-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    background: #94a3b8;
+}
+
+/* Numeric Page Buttons */
+.nb-page-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    color: #000000;
+    border: 2px solid #000000;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 2.5px 2.5px 0px #000000;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.nb-page-btn:hover:not(.is-active) {
+    background: #fee2e2; /* Light soft red tint */
+    color: #850101;
+    transform: translate(1px, 1px);
+    box-shadow: 1.5px 1.5px 0px #000000;
+}
+
+/* Active Page: Dark Red with White text and pressed state */
+.nb-page-btn.is-active {
+    background: #850101;
+    color: #ffffff;
+    box-shadow: none;
+    transform: translate(2px, 2px);
+    border-color: #000000;
+}
+
+/* ================= RESPONSIVE DESIGN FOR MOBILE & TABLETS (<= 768px) ================= */
+@media (max-width: 768px) {
+    #neobrutalism-tv-carousel-container {
+        --nb-left: 12px;
+        top: 50%;
+        width: calc(100vw - 24px);
+        max-width: 345px;
+        gap: 8px;
+    }
+
+    /* When collapsed on Mobile: Completely tucked flush behind left screen edge */
+    #neobrutalism-tv-carousel-container.is-collapsed {
+        transform: translateY(-50%) translateX(calc(-100% - var(--nb-left) - 15px)) !important;
+    }
+
+    /* Enable Mobile Drawer Toggle Tab */
+    .nb-drawer-toggle {
+        display: flex !important;
+        position: absolute;
+        top: 50%;
+        left: calc(100% + 15px);
+        right: auto;
+        transform: translateY(-50%);
+        width: 36px;
+        background: #f60101;
+        color: #ffffff;
+        border: 2.5px solid #000000;
+        border-left: none;
+        border-radius: 0 8px 8px 0;
+        box-shadow: 3.5px 3.5px 0px #000000;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px 2px;
+        cursor: pointer;
+        z-index: 50;
+        user-select: none;
+        transition: background 0.15s ease, box-shadow 0.12s ease, transform 0.12s ease;
+        box-sizing: border-box;
+    }
+
+    .nb-drawer-toggle:hover {
+        background: #850101;
+    }
+
+    .nb-drawer-toggle:active {
+        box-shadow: 1px 1px 0px #000000;
+    }
+
+    .nb-toggle-icon {
+        font-size: 12px;
+        font-weight: 900;
+        line-height: 1;
+        transition: transform 0.25s ease;
+    }
+
+    .nb-toggle-text {
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .nb-drawer-toggle.is-collapsed-tab {
+        background: #f60101;
+        animation: nb-pulse-glow 2.4s infinite ease-in-out;
+    }
+
+    /* Enable Topbar Close Button on Mobile */
+    .nb-card-close-btn {
+        display: inline-flex !important;
+        width: 24px;
+        height: 24px;
+        align-items: center;
+        justify-content: center;
+        background: #f60101;
+        color: #ffffff;
+        border: 2px solid #000000;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: 2px 2px 0px #000000;
+        transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.1s ease;
+        padding: 0;
+    }
+
+    .nb-card-close-btn:hover {
+        background: #850101;
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0px #000000;
+    }
+
+    .nb-card-close-btn:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0px 0px 0px #000000;
+    }
+
+    .nb-carousel-card {
+        padding: 12px 14px 14px 14px;
+        border-width: 3px;
+        border-radius: 12px;
+        box-shadow: 5px 5px 0px #000000;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nb-card-topbar {
+        padding-bottom: 8px;
+    }
+
+    .nb-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .nb-card-counter {
+        font-size: 11px;
+        padding: 2px 6px;
+    }
+
+    .nb-slide-image-wrapper {
+        height: 135px;
+        border-width: 2px;
+        border-radius: 6px;
+        box-shadow: 2.5px 2.5px 0px #000000;
+    }
+
+    .nb-image-badge {
+        font-size: 9.5px;
+        padding: 2px 6px;
+        bottom: 6px;
+        right: 6px;
+    }
+
+    .nb-slide-title {
+        font-size: 16px;
+    }
+
+    .nb-slide-subtitle {
+        font-size: 10px;
+    }
+
+    .nb-slide-desc {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .nb-highlight-desc {
+        font-size: 14px;
+        padding: 8px 4px;
+    }
+
+    .nb-wishlist-btn {
+        padding: 8px 12px;
+        font-size: 11.5px;
+        border-width: 2px;
+        box-shadow: 2.5px 2.5px 0px #000000;
+    }
+
+    .nb-social-grid {
+        gap: 6px;
+    }
+
+    .nb-social-btn {
+        padding: 6px 8px;
+        font-size: 11px;
+        border-width: 2px;
+        box-shadow: 2px 2px 0px #000000;
+    }
+
+    .nb-pagination {
+        padding: 4px 6px;
+        border-width: 2.5px;
+        box-shadow: 3.5px 3.5px 0px #000000;
+        gap: 4px;
+    }
+
+    .nb-nav-btn {
+        padding: 4px 8px;
+        font-size: 11.5px;
+        border-width: 1.5px;
+    }
+
+    .nb-page-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+        border-width: 1.5px;
+    }
+}
+
+@keyframes nb-pulse-glow {
+    0%, 100% { box-shadow: 3.5px 3.5px 0px #000000; }
+    50% { box-shadow: 3.5px 3.5px 10px rgba(246, 1, 1, 0.7), 3.5px 3.5px 0px #000000; }
+}

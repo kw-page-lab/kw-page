@@ -1,3 +1,5 @@
 .DS_Store
 Thumbs.db
 *.log
+serve_v3.py
+act2_diagnosis.md
