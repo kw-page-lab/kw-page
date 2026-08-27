@@ -47,23 +47,6 @@ function animate() {
         window.act1Factor = Math.max(window.act1Target, window.act1Factor - deltaTime * act1TransitionSpeed);
     }
 
-    // Auto-focus on TV when scrolling down to bottom in Act 1 mode (only if focus lock is enabled)
-    if (document.body.classList.contains('act1-focus-lock') && window.act1Factor > 0.5 && !isTVFocused && !isExitingTV && targetScrollProgress === 1.0 && scrollProgress > 0.95) {
-        isTVFocused = true;
-        window.tvFocusStartTime = Date.now();
-        tvYaw = 0;
-        tvPitch = 0;
-        currentTvYaw = 0;
-        currentTvPitch = 0;
-        const targetDist = getTVTargetFocusDistance();
-        tvFocusDistance = targetDist;
-        tvTargetFocusDistance = targetDist;
-        isCameraLocked = true;
-        if (typeof updateCameraLockUI === 'function') {
-            updateCameraLockUI();
-        }
-    }
-
     // Sync body class with TV focus state
     if (isTVFocused) {
         if (!document.body.classList.contains('tv-focused')) {
@@ -84,17 +67,28 @@ function animate() {
     if (updateTV) {
         updateTV(now * 0.001, deltaTime);
     }
-    // Damp cabinet internal light intensity based on Act 1 factor
+    // Fully extinguish internal lights in void mode
     if (window.tvInternalCabinetLight) {
-        window.tvInternalCabinetLight.intensity *= (1.0 - window.act1Factor);
+        window.tvInternalCabinetLight.intensity = 0.0;
+        window.tvInternalCabinetLight.visible = false;
     }
-    if (window.tvBezelLight && window.tvCrtLight) {
-        window.tvBezelLight.color.copy(window.tvCrtLight.color);
-        window.tvBezelLight.intensity = (window.tvCrtLight.intensity / 16.0) * 4.5;
+    if (window.tvCrtLight) {
+        window.tvCrtLight.intensity = 0.0;
+        window.tvCrtLight.visible = false;
+    }
+    // Dynamic emission from the screen illuminating the chassis and bezel
+    if (window.tvBezelLight) {
+        window.tvBezelLight.visible = true;
+        if (window.tvCrtLight) {
+            window.tvBezelLight.color.copy(window.tvCrtLight.color);
+        }
+        // Realistic CRT ambient chassis glow with subtle pulse
+        const flicker = 1.0 + Math.sin(now * 0.035) * 0.08 + Math.sin(now * 0.007) * 0.04;
+        window.tvBezelLight.intensity = 4.2 * flicker;
     }
     if (window.tvBasePosition) {
-        const bob = Math.sin(now * 0.0015) * 0.08;
-        window.tvBasePosition.y = -2.5 + bob;
+        const bob = Math.sin(now * 0.0015) * 0.04;
+        window.tvBasePosition.y = -3.2 + bob;
     }
 
     // Update TV Pulsar Light (Fades in and out, teleports when fully faded out, disabled when focused)
@@ -205,17 +199,14 @@ function animate() {
         lastTime = time;
     }
 
-    // Rotate Cuboid
-    if (params.autoRotate && cuboidGroup) {
-        const speedFactor = params.rotateSpeed * 0.01;
-        const t = time * 0.001 * params.rotateSpeed;
-        
-        // Continuous horizontal rotation (around Y axis)
-        cuboidGroup.rotation.y += speedFactor;
-        
-        // Gentle limited oscillation/rocking vertically (around X and Z axes) to maintain legibility
-        cuboidGroup.rotation.x = Math.sin(t * 0.5) * 0.12; // Limit vertical tilt to ~7 degrees
-        cuboidGroup.rotation.z = Math.cos(t * 0.3) * 0.04; // Limit roll tilt to ~2 degrees
+    // Monolith resting in water with diagonal corner submersion (submerged much deeper)
+    if (cuboidGroup) {
+        const t = time * 0.001;
+        // Diagonal pitch and roll: bottom corner dips deep under water
+        cuboidGroup.rotation.x = -Math.PI / 2.6 + Math.sin(t * 0.7) * 0.03;
+        cuboidGroup.rotation.y = 0.38 + Math.cos(t * 0.5) * 0.03;
+        cuboidGroup.rotation.z = -0.35 + Math.sin(t * 0.6) * 0.02;
+        cuboidGroup.position.y = -2.1 + Math.sin(t * 1.1) * 0.04;
     }
 
     // Rotate background stars slowly
@@ -240,31 +231,27 @@ function animate() {
         // Disable OrbitControls input processing
         controls.enabled = false;
 
-        const tvCenterY = getTVCenterY();
+        // In aerial top-down mode, keep standard up vector (0, 0, -1) so the TV screen is right side up (North is up)
+        const tvWorldPos = new THREE.Vector3();
+        if (window.tvGroup) window.tvGroup.getWorldPosition(tvWorldPos);
+        else tvWorldPos.set(0, -2.9, 8.0);
 
         // Smoothly interpolate the focus distance (zoom)
-        tvFocusDistance = THREE.MathUtils.lerp(tvFocusDistance, tvTargetFocusDistance, 0.08);
+        tvFocusDistance = THREE.MathUtils.lerp(tvFocusDistance, 4.2, 0.08);
 
         // Smoothly interpolate the look-around offsets
         currentTvYaw = THREE.MathUtils.lerp(currentTvYaw, tvYaw, 0.1);
         currentTvPitch = THREE.MathUtils.lerp(currentTvPitch, tvPitch, 0.1);
 
-        // Position the camera directly in front of the TV (X=0, Y=tvCenterY, Z=tvFocusDistance)
-        // (Using lerp for position guarantees a smooth entry glide)
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0.0, 0.06);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, tvCenterY, 0.06);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, tvFocusDistance, 0.06);
+        // Position camera directly above the TV looking straight down
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, tvWorldPos.x, 0.08);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, tvWorldPos.y + tvFocusDistance, 0.08);
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, tvWorldPos.z + 0.1, 0.08);
 
-        // Roll camera up-vector to match the TV's hanging roll tilt (rotation.z = 0.16)
-        camera.up.x = THREE.MathUtils.lerp(camera.up.x, -Math.sin(0.16), 0.06);
-        camera.up.y = THREE.MathUtils.lerp(camera.up.y, Math.cos(0.16), 0.06);
-        camera.up.z = 0.0;
+        // Standard aerial camera up vector pointing along -Z (North)
+        camera.up.set(0, 0, -1);
 
-        // Look at the target point on the screen Z = 0 plane, shifted by the yaw/pitch offsets
-        const targetX = currentTvYaw;
-        const targetY = tvCenterY + currentTvPitch;
-        const targetZ = 0.0;
-        camera.lookAt(targetX, targetY, targetZ);
+        camera.lookAt(tvWorldPos.x + currentTvYaw, tvWorldPos.y, tvWorldPos.z + currentTvPitch);
     } else {
         // If we are currently in the exit focus transition
         if (isExitingTV) {
@@ -306,43 +293,34 @@ function animate() {
                 }
             }
         } else {
-            // Ensure camera up vector is returned to standard upright orientation
-            camera.up.set(0, 1, 0);
-            
-            if (isCameraLocked) {
-                // Disable OrbitControls during elevator scroll transition to prevent interruptions
-                const isTransitioning = Math.abs(scrollProgress - targetScrollProgress) > 0.25;
-                if (isTransitioning) {
-                    controls.enabled = false;
-                } else {
-                    controls.enabled = true;
-                }
+            // Smoothly interpolate scroll progress for camera positioning
+            scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.045);
 
-                controls.enableZoom = false;
-                // Smoothly interpolate scroll state and apply to camera target (keeping distance constant at 10.0)
-                scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.04);
-                controls.target.y = THREE.MathUtils.lerp(15.0, 0.45, scrollProgress);
-                controls.target.x = THREE.MathUtils.lerp(controls.target.x, 0, 0.06);
-                controls.target.z = THREE.MathUtils.lerp(controls.target.z, 0, 0.06);
-                
-                controls.minDistance = THREE.MathUtils.lerp(controls.minDistance, 10.0, 0.06);
-                controls.maxDistance = THREE.MathUtils.lerp(controls.maxDistance, 10.0, 0.06);
-                
-                // Smoothly lerp polar angle limits to horizontal
-                controls.minPolarAngle = THREE.MathUtils.lerp(controls.minPolarAngle, Math.PI / 2, 0.06);
-                controls.maxPolarAngle = THREE.MathUtils.lerp(controls.maxPolarAngle, Math.PI / 2, 0.06);
-            } else {
-                controls.enabled = true;
-                controls.enableZoom = true;
-                
-                // Smoothly lerp polar angle limits and distance for free camera mode
-                controls.minPolarAngle = THREE.MathUtils.lerp(controls.minPolarAngle, Math.PI / 3, 0.06);
-                controls.maxPolarAngle = THREE.MathUtils.lerp(controls.maxPolarAngle, Math.PI / 2 + 0.05, 0.06);
-                controls.minDistance = THREE.MathUtils.lerp(controls.minDistance, 5.0, 0.06);
-                controls.maxDistance = THREE.MathUtils.lerp(controls.maxDistance, 25.0, 0.06);
-            }
+            // Monolith target (scroll = 0): (0, -2.1, -9.0)
+            // TV target (scroll = 1): (0, -2.5, 9.5) — centered directly on the TV
+            const targetX = 0.0;
+            const targetY = THREE.MathUtils.lerp(-2.1, -2.5, scrollProgress);
+            const targetZ = THREE.MathUtils.lerp(-9.0, 9.5, scrollProgress);
+
+            controls.target.set(targetX, targetY, targetZ);
             
+            // Symmetrical high aerial vantage point (height Y = 8.5) looking straight down on both objects
+            if (isCameraLocked) {
+                // Overhead flight: cam at (0, 8.5, -9.0) when scroll=0 -> (0, 8.5, 9.5) when scroll=1
+                const camY = 8.5;
+                const camZ = THREE.MathUtils.lerp(-9.0, 9.5, scrollProgress);
+                camera.position.x = 0.0;
+                camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, 0.06);
+                camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, 0.06);
+                camera.up.set(0, 0, -1);
+            }
+
             controls.update();
+
+            // Strict underwater view prevention: keep camera safely above the water plane
+            if (controls.enabled && camera.position.y < -1.15) {
+                camera.position.y = -1.15;
+            }
         }
     }
 
@@ -368,6 +346,19 @@ function animate() {
             tvOverlayEl.style.pointerEvents = 'auto';
         } else {
             tvOverlayEl.style.pointerEvents = 'none';
+        }
+    }
+
+    // Update Neobrutalism TV Side Carousel opacity and smooth glide
+    const nbCarouselEl = document.getElementById('neobrutalism-tv-carousel-container');
+    if (nbCarouselEl) {
+        nbCarouselEl.style.opacity = tvOverlayOpacity;
+        if (tvOverlayOpacity > 0.05) {
+            nbCarouselEl.style.pointerEvents = 'auto';
+            nbCarouselEl.classList.add('is-tv-visible');
+        } else {
+            nbCarouselEl.style.pointerEvents = 'none';
+            nbCarouselEl.classList.remove('is-tv-visible');
         }
     }
 
@@ -402,17 +393,24 @@ function animate() {
         }
     }
     if (liquidFloorReal && liquidFloorReal.visible) {
-        liquidFloorReal.material.uniforms[ 'time' ].value = time * 0.001 * 0.25;
-        if (dirLight) {
-            liquidFloorReal.material.uniforms[ 'sunDirection' ].value.copy(dirLight.position).normalize();
-        }
-        // Update TV displacement uniforms for THREE.Water shader
+        liquidFloorReal.material.uniforms[ 'time' ].value = time * 0.001 * 0.95;
+        liquidFloorReal.material.uniforms[ 'sunDirection' ].value.set(0.0, 1.0, 0.0);
+        // Update displacement uniforms for THREE.Water shader
         if (window._waterRealShader) {
             window._waterRealShader.uniforms.uWaterTime.value = time * 0.001;
-            if (window.tvGroup) {
+            if (window.tvCrtScreen || window.tvGroup) {
                 const tvWorldPos = new THREE.Vector3();
-                window.tvGroup.getWorldPosition(tvWorldPos);
+                if (window.tvCrtScreen) {
+                    window.tvCrtScreen.getWorldPosition(tvWorldPos);
+                } else {
+                    window.tvGroup.getWorldPosition(tvWorldPos);
+                }
                 window._waterRealShader.uniforms.uObjPos.value.set(tvWorldPos.x, tvWorldPos.z);
+            }
+            if (cuboidGroup) {
+                const monoWorldPos = new THREE.Vector3();
+                cuboidGroup.getWorldPosition(monoWorldPos);
+                window._waterRealShader.uniforms.uMonolithPos.value.set(monoWorldPos.x, monoWorldPos.z);
             }
         }
     }
@@ -509,6 +507,11 @@ function animate() {
         
         waterParticleGeometry.attributes.position.needsUpdate = true;
         waterParticleGeometry.attributes.color.needsUpdate = true;
+    }
+
+    // Update organic tentacles cluster hugging monolith and TV
+    if (typeof updateTentacles === 'function') {
+        updateTentacles(now * 0.001, deltaTime);
     }
 
     renderer.render(scene, camera);

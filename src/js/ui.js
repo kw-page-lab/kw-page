@@ -403,3 +403,168 @@ function updateCameraLockUI() {
         lockIcon.innerHTML = isCameraLocked ? svgLocked : svgUnlocked;
     }
 }
+
+// Setup Neobrutalism Carousel with Pagination controls and Responsive Collapsible Drawer
+function setupNeobrutalismCarousel() {
+    const container = document.getElementById('neobrutalism-tv-carousel-container');
+    const track = document.getElementById('nb-carousel-track');
+    const viewport = document.getElementById('nb-carousel-viewport');
+    const prevBtn = document.getElementById('nb-prev-btn');
+    const nextBtn = document.getElementById('nb-next-btn');
+    const pageBtns = document.querySelectorAll('.nb-page-btn');
+    const counterEl = document.getElementById('nb-card-counter');
+    const activeBadge = document.getElementById('nb-active-badge');
+    const slides = document.querySelectorAll('.nb-carousel-slide');
+    const toggleBtn = document.getElementById('nb-toggle-drawer-btn');
+    const closeBtn = document.getElementById('nb-close-card-btn');
+    const toggleIcon = document.getElementById('nb-toggle-icon');
+    const toggleText = document.getElementById('nb-toggle-text');
+
+    if (!track || !slides.length) return;
+
+    let currentIndex = 0;
+    const totalSlides = slides.length;
+    let isCollapsed = false;
+
+    function setDrawerCollapsed(collapsed) {
+        isCollapsed = collapsed;
+        if (!container) return;
+
+        if (isCollapsed) {
+            container.classList.add('is-collapsed');
+            if (toggleIcon) toggleIcon.textContent = '▶';
+            if (toggleText) toggleText.textContent = 'NOTICIAS';
+            if (toggleBtn) {
+                toggleBtn.setAttribute('title', 'Abrir noticias y anuncios');
+                toggleBtn.classList.add('is-collapsed-tab');
+            }
+        } else {
+            container.classList.remove('is-collapsed');
+            if (toggleIcon) toggleIcon.textContent = '◀';
+            if (toggleText) toggleText.textContent = 'NOTICIAS';
+            if (toggleBtn) {
+                toggleBtn.setAttribute('title', 'Ocultar noticias');
+                toggleBtn.classList.remove('is-collapsed-tab');
+            }
+        }
+    }
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setDrawerCollapsed(!isCollapsed);
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setDrawerCollapsed(true);
+        });
+    }
+
+    function goToSlide(index) {
+        if (index < 0) index = 0;
+        if (index >= totalSlides) index = totalSlides - 1;
+        currentIndex = index;
+
+        track.style.transform = `translateX(-${currentIndex * 100}%)`;
+
+        // Update slide active classes to ensure perfect visual isolation
+        slides.forEach((slide, idx) => {
+            if (idx === currentIndex) {
+                slide.classList.add('is-active-slide');
+            } else {
+                slide.classList.remove('is-active-slide');
+            }
+        });
+
+        // Update pagination buttons active state
+        pageBtns.forEach((btn, idx) => {
+            if (idx === currentIndex) {
+                btn.classList.add('is-active');
+            } else {
+                btn.classList.remove('is-active');
+            }
+        });
+
+        // Update Prev / Next disabled states
+        if (prevBtn) prevBtn.disabled = currentIndex === 0;
+        if (nextBtn) nextBtn.disabled = currentIndex === totalSlides - 1;
+
+        // Update Counter
+        if (counterEl) {
+            counterEl.textContent = `${currentIndex + 1} / ${totalSlides}`;
+        }
+
+        // Update Badge Text and Class
+        const curSlide = slides[currentIndex];
+        if (curSlide && activeBadge) {
+            const badgeText = curSlide.getAttribute('data-badge') || `CARD ${currentIndex + 1}`;
+            const badgeClass = curSlide.getAttribute('data-badge-class') || 'nb-badge-yellow';
+            activeBadge.textContent = badgeText;
+            activeBadge.className = `nb-badge ${badgeClass}`;
+        }
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            goToSlide(currentIndex - 1);
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            goToSlide(currentIndex + 1);
+        });
+    }
+
+    pageBtns.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const pageIndex = parseInt(btn.getAttribute('data-page'), 10);
+            if (!isNaN(pageIndex)) {
+                goToSlide(pageIndex);
+            }
+        });
+    });
+
+    // Touch swipe gesture for the carousel viewport
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    if (viewport) {
+        viewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+            }
+        }, { passive: true });
+
+        viewport.addEventListener('touchend', (e) => {
+            if (e.changedTouches.length === 1) {
+                touchEndX = e.changedTouches[0].clientX;
+                const diffX = touchStartX - touchEndX;
+                if (diffX > 35) {
+                    goToSlide(currentIndex + 1);
+                } else if (diffX < -35) {
+                    goToSlide(currentIndex - 1);
+                }
+            }
+        }, { passive: true });
+    }
+
+    // Reset collapsed state when transitioning to desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && isCollapsed) {
+            setDrawerCollapsed(false);
+        }
+    });
+
+    // Initialize slide 0 & default state (collapsed by default on mobile, open on desktop)
+    goToSlide(0);
+    const startCollapsed = window.innerWidth <= 768;
+    setDrawerCollapsed(startCollapsed);
+}
+

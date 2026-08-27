@@ -7,9 +7,10 @@ function init() {
     scene.background = new THREE.Color(0x050608);
     scene.fog = new THREE.Fog(0x050608, 15, 30);
 
-    // 2. Camera Setup
+    // 2. Camera Setup — High overhead aerial view looking straight down into the water
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 150);
-    camera.position.set(0, 15.0, 10);
+    camera.position.set(0, 8.5, -9.0);
+    camera.up.set(0, 0, -1); // North is UP on screen
 
     // 3. Renderer Setup — no logarithmicDepthBuffer (huge perf cost, z-fighting handled by renderOrder)
     const isLinux = /Linux/i.test(navigator.userAgent) || 
@@ -35,13 +36,13 @@ function init() {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.enableZoom = false; // Disable default mouse wheel zoom to implement custom scrolling
-    controls.enablePan = false;  // Disable right-click panning to restrict camera targets
-    controls.minPolarAngle = Math.PI / 2; // Lock vertical tilt to look straight ahead
-    controls.maxPolarAngle = Math.PI / 2; // Lock vertical tilt to look straight ahead
-    controls.minDistance = 10;
-    controls.maxDistance = 10;
-    controls.target.set(0, 15.0, 0);
+    controls.enableZoom = true;
+    controls.enablePan = true;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 35.0;
+    controls.maxPolarAngle = Math.PI / 2.35; // Strict water level clamp: prevents peering underneath the water
+    controls.minPolarAngle = 0.01;           // Full overhead vertical capability
+    controls.target.set(0.0, -2.1, -9.0); // Initial target: Monolith at Z = -9.0
 
     // 5. Strategic Lighting Setup — designed to accentuate monolith reliefs
 
@@ -65,9 +66,12 @@ function init() {
     createClouds();
     createWaterParticles();
 
-    // 7. Load GLB Model
+    // 7. Load GLB Model & Tentacles
     loadModel();
     loadTVModel();
+    if (typeof initTentacles === 'function') {
+        initTentacles();
+    }
 
     // 8. Add Listeners
     window.addEventListener('resize', onWindowResize);
@@ -130,33 +134,7 @@ function init() {
     let lastPointerX = 0;
     let lastPointerY = 0;
     window.addEventListener('pointerup', (event) => {
-        // Ignore clicks on buttons, inputs, links, control panels, or sidebars
-        if (event.target.closest('button') || 
-            event.target.closest('a') || 
-            event.target.closest('.control-panel') || 
-            event.target.closest('.sidebar-panel') ||
-            event.target.closest('#resetCam') ||
-            event.target.closest('#toggleLockCam') ||
-            event.target.closest('.social-action-btn')) {
-            return;
-        }
-        
-        const currentTime = Date.now();
-        const timeDiff = currentTime - lastPointerTime;
-        const dist = Math.hypot(event.clientX - lastPointerX, event.clientY - lastPointerY);
-        
-        // Allow slightly larger distance on touch to account for finger size
-        const maxDist = event.pointerType === 'touch' ? 45 : 30;
-        const maxDelay = 350; // More forgiving 350ms window
-        
-        if (timeDiff < maxDelay && timeDiff > 0 && dist < maxDist) {
-            triggerTVFocus(event.clientX, event.clientY);
-            lastPointerTime = 0; // Prevent triple clicks/taps
-        } else {
-            lastPointerTime = currentTime;
-            lastPointerX = event.clientX;
-            lastPointerY = event.clientY;
-        }
+        // Double-click focus disabled in aerial mode
     });
     
     // Custom pointer/mouse dragging for TV Look-Around
@@ -179,9 +157,9 @@ function init() {
         tvYaw += deltaX * 0.003 * tvFocusDistance;
         tvPitch -= deltaY * 0.003 * tvFocusDistance;
 
-        // Clamp angles so the screen stays in view
-        const maxYaw = 1.2;
-        const maxPitch = 0.9;
+        // Clamp angles: broad horizontal look-around freedom, controlled pitch
+        const maxYaw = 2.5;
+        const maxPitch = 0.65;
         tvYaw = Math.max(-maxYaw, Math.min(maxYaw, tvYaw));
         tvPitch = Math.max(-maxPitch, Math.min(maxPitch, tvPitch));
     });
@@ -213,8 +191,8 @@ function init() {
             tvYaw += deltaX * 0.0035 * tvFocusDistance;
             tvPitch -= deltaY * 0.0035 * tvFocusDistance;
 
-            const maxYaw = 1.2;
-            const maxPitch = 0.9;
+            const maxYaw = 2.5;
+            const maxPitch = 0.65;
             tvYaw = Math.max(-maxYaw, Math.min(maxYaw, tvYaw));
             tvPitch = Math.max(-maxPitch, Math.min(maxPitch, tvPitch));
         }
@@ -306,6 +284,9 @@ function init() {
 
     // Setup Scroll Down Hint
     setupScrollHint();
+
+    // Setup Neobrutalism Carousel & Pagination
+    setupNeobrutalismCarousel();
 
     // 9. Start Animation
     animate();

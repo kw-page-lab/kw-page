@@ -34,8 +34,8 @@ function loadModel() {
         updateMeshPositions();
         updateGLBMaterials();
 
-        // Raise monolith significantly higher (to act as another screen above)
-        cuboidGroup.position.y = 15.0;
+        // Place monolith in the far upper river area (Z = -9.0, Y = -0.5) partially submerged on one corner
+        cuboidGroup.position.set(0, -0.5, -9.0);
 
         scene.add(cuboidGroup);
 

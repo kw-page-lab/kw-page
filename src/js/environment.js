@@ -153,9 +153,9 @@ function updateEnvironmentFromTime() {
     if (standardRed) standardRed.emissiveIntensity = emissiveRed;
     if (lambertRed) lambertRed.emissiveIntensity = emissiveRed;
 
-    // Apply to TV spotlight from above (swaying lamp)
-    if (window.tvSpotlight && typeof window.act1Factor !== 'undefined') {
-        window.tvSpotlight.intensity = THREE.MathUtils.lerp(65.0, 0.0, window.act1Factor);
+    // Apply to TV spotlight from above (swaying lamp) - disabled for dark moody atmosphere
+    if (window.tvSpotlight) {
+        window.tvSpotlight.intensity = 0.0;
     }
 
     // Apply to liquid floor uniforms
