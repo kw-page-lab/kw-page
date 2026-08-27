@@ -104,7 +104,7 @@
         let lx = _delta.x, ly = _delta.y, lz = _delta.z;
 
         if (isTV) {
-            const hw = 1.95, hh = 1.70, minZ = -1.65, maxZ = 0.00;
+            const hw = 2.15, hh = 1.85, minZ = -2.40, maxZ = 0.08;
             const cx = Math.max(-hw, Math.min(hw, lx));
             const cy = Math.max(-hh, Math.min(hh, ly));
             const cz = Math.max(minZ, Math.min(maxZ, lz));
@@ -179,10 +179,10 @@
     function pushMeshVertex(v, bPos, bQuat, bInvQuat, isTV, bHalfSize) {
         _delta.subVectors(v, bPos).applyQuaternion(bInvQuat);
         let lx = _delta.x, ly = _delta.y, lz = _delta.z;
-        const margin = 0.003;
+        const margin = 0.008;
 
         if (isTV) {
-            const hw = 1.95, hh = 1.70, minZ = -1.65, maxZ = 0.00;
+            const hw = 2.15, hh = 1.85, minZ = -2.40, maxZ = 0.08;
             if (Math.abs(lx) <= hw && Math.abs(ly) <= hh && lz >= minZ && lz <= maxZ) {
                 const dxp = hw - lx, dxn = hw + lx;
                 const dyp = hh - ly, dyn = hh + ly;
