@@ -256,34 +256,25 @@ function animate() {
         // If we are currently in the exit focus transition
         if (isExitingTV) {
             controls.enabled = false;
-
-            const targetY = THREE.MathUtils.lerp(15.0, 0.45, targetScrollProgress);
             
-            // Smoothly transition scroll progress (helps sync secondary visual animations)
+            // Smoothly transition scroll progress
             scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.08);
 
-            // Smoothly glide camera position back to the locked state (faster lerp speed)
+            // Smoothly glide camera position back to State 2 (TV Aerial view)
             camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0.0, 0.11);
-            camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 0.11);
-            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 10.0, 0.11);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, 8.5, 0.11);
+            camera.position.z = THREE.MathUtils.lerp(camera.position.z, 9.5, 0.11);
 
-            // Smoothly restore camera up orientation to upright
-            camera.up.x = THREE.MathUtils.lerp(camera.up.x, 0.0, 0.11);
-            camera.up.y = THREE.MathUtils.lerp(camera.up.y, 1.0, 0.11);
-            camera.up.z = 0.0;
+            // Restore aerial orientation
+            camera.up.set(0, 0, -1);
+            camera.lookAt(0, -2.5, 9.5);
 
-            // Smoothly transition look-at target back to the elevator center
-            window.currentExitTargetX = THREE.MathUtils.lerp(window.currentExitTargetX || 0.0, 0.0, 0.11);
-            window.currentExitTargetY = THREE.MathUtils.lerp(window.currentExitTargetY || targetY, targetY, 0.11);
-            camera.lookAt(window.currentExitTargetX, window.currentExitTargetY, 0.0);
-
-            // Check if exit transition is complete (shorter duration for snappier unlock)
+            // Check if exit transition is complete
             if (Date.now() - tvExitStartTime >= 400) {
                 isExitingTV = false;
-                controls.enabled = true;
-                controls.target.set(0, targetY, 0);
-                camera.position.set(0, targetY, 10);
-                controls.update();
+                camera.position.set(0, 8.5, 9.5);
+                camera.up.set(0, 0, -1);
+                camera.lookAt(0, -2.5, 9.5);
 
                 // If a scroll-up is pending in Act 1, trigger it now!
                 if (window.act1ScrollUpPending) {
@@ -298,75 +289,82 @@ function animate() {
 
             let targetX = 0.0, targetY = -2.1, targetZ = -9.0;
             let camX = 0.0, camY = 8.5, camZ = -9.0;
-            let upY = 0.0, upZ = -1.0;
+            let upX = 0.0, upY = 0.0, upZ = -1.0;
 
             if (scrollProgress <= 0.5) {
-                // Interpolate from State 1 (Monolito Aéreo) to State 2 (Monolito Sumergido / Rasante Agua & Cielo)
+                // ============================================================
+                // STAGE 1 (scroll=0.0): Monolith Aerial (0, 8.5, -9.0) ->
+                // STAGE 2 (scroll=0.5): TV CRT Aerial (0, 8.5, 9.5)
+                // ============================================================
                 const t = scrollProgress / 0.5;
-                // State 1: cam=(0, 8.5, -9.0), target=(0, -2.1, -9.0), up=(0, 0, -1)
-                // State 2: cam=(0, -1.82, -4.6), target=(0, 0.6, -9.0), up=(0, 1, 0)
                 camX = 0.0;
-                camY = THREE.MathUtils.lerp(8.5, -1.82, t);
-                camZ = THREE.MathUtils.lerp(-9.0, -4.6, t);
+                camY = 8.5;
+                camZ = THREE.MathUtils.lerp(-9.0, 9.5, t);
 
                 targetX = 0.0;
-                targetY = THREE.MathUtils.lerp(-2.1, 0.6, t);
-                targetZ = THREE.MathUtils.lerp(-9.0, -9.0, t);
-
-                upY = THREE.MathUtils.lerp(0.0, 1.0, t);
-                upZ = THREE.MathUtils.lerp(-1.0, 0.0, t);
-            } else {
-                // Interpolate from State 2 (Monolito Sumergido / Rasante) to State 3 (TV CRT Aéreo)
-                const t = (scrollProgress - 0.5) / 0.5;
-                // State 2: cam=(0, -1.82, -4.6), target=(0, 0.6, -9.0), up=(0, 1, 0)
-                // State 3: cam=(0, 8.5, 9.5), target=(0, -2.5, 9.5), up=(0, 0, -1)
-                camX = 0.0;
-                camY = THREE.MathUtils.lerp(-1.82, 8.5, t);
-                camZ = THREE.MathUtils.lerp(-4.6, 9.5, t);
-
-                targetX = 0.0;
-                targetY = THREE.MathUtils.lerp(0.6, -2.5, t);
+                targetY = THREE.MathUtils.lerp(-2.1, -2.5, t);
                 targetZ = THREE.MathUtils.lerp(-9.0, 9.5, t);
 
-                upY = THREE.MathUtils.lerp(1.0, 0.0, t);
-                upZ = THREE.MathUtils.lerp(0.0, -1.0, t);
+                upX = 0.0;
+                upY = 0.0;
+                upZ = -1.0; // Pure aerial orientation
+            } else {
+                // ============================================================
+                // STAGE 2 (scroll=0.5): TV CRT Aerial (0, 8.5, 9.5) ->
+                // STAGE 3 (scroll=1.0): NEW Submerged Monolith Waterline View
+                //   Camera placed skimming water level (Y = -1.78, Z = -3.2)
+                //   Looking UPWARDS (pitch +28 deg) into the sky & sinking monolith (target Y = 1.4, Z = -9.0)
+                //   Orientation: camera.up = (0, 1, 0) (UPRIGHT CINEMATIC, NOT AERIAL)
+                // ============================================================
+                const t = (scrollProgress - 0.5) / 0.5;
+                camX = 0.0;
+                camY = THREE.MathUtils.lerp(8.5, -1.78, t);
+                camZ = THREE.MathUtils.lerp(9.5, -3.2, t);
+
+                targetX = 0.0;
+                targetY = THREE.MathUtils.lerp(-2.5, 1.4, t);
+                targetZ = THREE.MathUtils.lerp(9.5, -9.0, t);
+
+                upX = 0.0;
+                upY = THREE.MathUtils.lerp(0.0, 1.0, t);
+                upZ = THREE.MathUtils.lerp(-1.0, 0.0, t);
             }
 
-            controls.target.set(targetX, targetY, targetZ);
-            
             if (isCameraLocked) {
+                controls.enabled = false;
                 camera.position.x = 0.0;
                 camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, 0.06);
                 camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, 0.06);
 
-                const upVec = new THREE.Vector3(0, upY, upZ);
+                const upVec = new THREE.Vector3(upX, upY, upZ);
                 if (upVec.lengthSq() > 0.001) {
                     upVec.normalize();
                     camera.up.copy(upVec);
                 }
-            }
+                camera.lookAt(targetX, targetY, targetZ);
+            } else {
+                controls.enabled = true;
+                controls.target.set(targetX, targetY, targetZ);
+                controls.update();
 
-            controls.update();
-
-            // Strict underwater view prevention in free roaming orbit mode
-            if (!isCameraLocked && controls.enabled && camera.position.y < -1.90) {
-                camera.position.y = -1.90;
+                // Prevent dipping deep below water in free roaming mode
+                if (camera.position.y < -1.90) {
+                    camera.position.y = -1.90;
+                }
             }
         }
     }
 
-    // Update TV scene overlay opacity based on camera scene context
+    // Update TV scene overlay opacity based on camera scene context (Active on Stage 2: TV view)
     let tvOverlayOpacity = 0.0;
     if (isTVFocused) {
         tvOverlayOpacity = 0.65; // Slightly transparent when fully focused
     } else if (isCameraLocked) {
-        // Fade in between scrollProgress 0.6 and 0.95
-        tvOverlayOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.6) / 0.35));
+        // Peaks at Stage 2 (scrollProgress = 0.5), fades out at Stage 1 (0.0) and Stage 3 (1.0)
+        tvOverlayOpacity = Math.max(0, 1.0 - Math.abs(scrollProgress - 0.5) / 0.20);
     } else {
         // Free roaming camera mode: base visibility on camera target Y level
         const targetY = controls ? controls.target.y : camera.position.y;
-        // TV is at Y=0.45, Monolith is at Y=15.
-        // Fade in below Y=5.0 and reach 1.0 at Y=2.0 or lower
         tvOverlayOpacity = Math.max(0, Math.min(1, (5.0 - targetY) / 3.0));
     }
     
@@ -401,9 +399,16 @@ function animate() {
         distorsionaOpacity = 0.0;
         comienzaOpacity = 0.0; // Disappears when centered/focused on screen
     } else if (isCameraLocked) {
-        // Cross-fade smoothly during transition to TV (State 3)
-        distorsionaOpacity = Math.max(0, Math.min(1, (0.70 - scrollProgress) / 0.2));
-        comienzaOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.65) / 0.2));
+        // Stage 1 (0.0): Distorsiona visible
+        // Stage 2 (0.5): Comienza la transmisión visible
+        // Stage 3 (1.0): Distorsiona visible sobre el monolito sumergido
+        if (scrollProgress <= 0.5) {
+            distorsionaOpacity = Math.max(0, 1.0 - (scrollProgress / 0.30));
+            comienzaOpacity = Math.max(0, (scrollProgress - 0.25) / 0.25);
+        } else {
+            comienzaOpacity = Math.max(0, 1.0 - ((scrollProgress - 0.5) / 0.25));
+            distorsionaOpacity = Math.max(0, ((scrollProgress - 0.75) / 0.25));
+        }
     } else {
         // Free camera: cross-fade based on camera height target Y
         const targetY = controls ? controls.target.y : camera.position.y;

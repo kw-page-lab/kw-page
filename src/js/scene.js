@@ -90,8 +90,8 @@ function init() {
             window.currentExitTargetY = tvCenterY + currentTvPitch;
             
             isCameraLocked = true;
-            targetScrollProgress = 1.0; // Snap vertical scroll to bottom
-            scrollProgress = 1.0;       // Ensure scroll progress matches target
+            targetScrollProgress = 0.5; // Snap vertical scroll to TV (Stage 2)
+            scrollProgress = 0.5;       // Ensure scroll progress matches target
             updateCameraLockUI();
             return;
         }
@@ -122,8 +122,8 @@ function init() {
             tvFocusDistance = targetDist;
             tvTargetFocusDistance = targetDist;
             
-            targetScrollProgress = 1.0; // Snap vertical scroll to bottom
-            scrollProgress = 1.0;       // Sync scroll progress
+            targetScrollProgress = 0.5; // Snap vertical scroll to TV (Stage 2)
+            scrollProgress = 0.5;       // Sync scroll progress
             isCameraLocked = false;    // Disable manual elevator scroll controls
             updateCameraLockUI();
         }
