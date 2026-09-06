@@ -256,115 +256,77 @@ function animate() {
         // If we are currently in the exit focus transition
         if (isExitingTV) {
             controls.enabled = false;
-            
-            // Smoothly transition scroll progress
-            scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.08);
 
             // Smoothly glide camera position back to State 2 (TV Aerial view)
             camera.position.x = THREE.MathUtils.lerp(camera.position.x, 0.0, 0.11);
             camera.position.y = THREE.MathUtils.lerp(camera.position.y, 8.5, 0.11);
             camera.position.z = THREE.MathUtils.lerp(camera.position.z, 9.5, 0.11);
 
-            // Restore aerial orientation
             camera.up.set(0, 0, -1);
             camera.lookAt(0, -2.5, 9.5);
 
-            // Check if exit transition is complete
             if (Date.now() - tvExitStartTime >= 400) {
                 isExitingTV = false;
+                targetStageIndex = 1;
+                fromCamPos.copy(CAMERA_STAGES[1].cam);
+                toCamPos.copy(CAMERA_STAGES[1].cam);
+                fromTargetPos.copy(CAMERA_STAGES[1].target);
+                toTargetPos.copy(CAMERA_STAGES[1].target);
+                fromUpVec.copy(CAMERA_STAGES[1].up);
+                toUpVec.copy(CAMERA_STAGES[1].up);
+                stageTransition = 1.0;
+
                 camera.position.set(0, 8.5, 9.5);
                 camera.up.set(0, 0, -1);
                 camera.lookAt(0, -2.5, 9.5);
-
-                // If a scroll-up is pending in Act 1, trigger it now!
-                if (window.act1ScrollUpPending) {
-                    console.log('[Act 1] Zoom-out complete. Transitioning to vertical scroll-up to monolith.');
-                    targetScrollProgress = 0.0;
-                    window.act1ScrollUpPending = false;
-                }
             }
         } else {
-            // Smoothly interpolate scroll progress for camera positioning (3-stage progression)
-            scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.045);
+            // Smoothly interpolate stage transition (Cyclical 1 -> 2 -> 3 -> 1 progression)
+            stageTransition = THREE.MathUtils.lerp(stageTransition, 1.0, 0.045);
+            const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
 
-            let targetX = 0.0, targetY = -2.1, targetZ = -9.0;
-            let camX = 0.0, camY = 8.5, camZ = -9.0;
-            let upX = 0.0, upY = 0.0, upZ = -1.0;
-
-            if (scrollProgress <= 0.5) {
-                // ============================================================
-                // STAGE 1 (scroll=0.0): Monolith Aerial (0, 8.5, -9.0) ->
-                // STAGE 2 (scroll=0.5): TV CRT Aerial (0, 8.5, 9.5)
-                // ============================================================
-                const t = scrollProgress / 0.5;
-                camX = 0.0;
-                camY = 8.5;
-                camZ = THREE.MathUtils.lerp(-9.0, 9.5, t);
-
-                targetX = 0.0;
-                targetY = THREE.MathUtils.lerp(-2.1, -2.5, t);
-                targetZ = THREE.MathUtils.lerp(-9.0, 9.5, t);
-
-                upX = 0.0;
-                upY = 0.0;
-                upZ = -1.0; // Pure aerial orientation
-            } else {
-                // ============================================================
-                // STAGE 2 (scroll=0.5): TV CRT Aerial (0, 8.5, 9.5) ->
-                // STAGE 3 (scroll=1.0): Submerged Monolith Long Side Waterline View
-                //   Camera positioned on the side/flank (X = 3.6, Y = -1.75, Z = -6.8)
-                //   Viewing the full long side and logo of the monolith sinking into water
-                //   Looking slightly UP towards (0.0, 0.4, -9.0) into the dramatic sky
-                //   Orientation: camera.up = (0, 1, 0) (UPRIGHT CINEMATIC)
-                // ============================================================
-                const t = (scrollProgress - 0.5) / 0.5;
-                camX = THREE.MathUtils.lerp(0.0, 3.6, t);
-                camY = THREE.MathUtils.lerp(8.5, -1.75, t);
-                camZ = THREE.MathUtils.lerp(9.5, -6.8, t);
-
-                targetX = 0.0;
-                targetY = THREE.MathUtils.lerp(-2.5, 0.4, t);
-                targetZ = THREE.MathUtils.lerp(9.5, -9.0, t);
-
-                upX = 0.0;
-                upY = THREE.MathUtils.lerp(0.0, 1.0, t);
-                upZ = THREE.MathUtils.lerp(-1.0, 0.0, t);
-            }
+            const curCamPos = fromCamPos.clone().lerp(toCamPos, t);
+            const curTargetPos = fromTargetPos.clone().lerp(toTargetPos, t);
+            const curUpVec = fromUpVec.clone().lerp(toUpVec, t);
+            if (curUpVec.lengthSq() > 0.001) curUpVec.normalize();
 
             if (isCameraLocked) {
                 controls.enabled = false;
-                camera.position.x = 0.0;
-                camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, 0.06);
-                camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, 0.06);
-
-                const upVec = new THREE.Vector3(upX, upY, upZ);
-                if (upVec.lengthSq() > 0.001) {
-                    upVec.normalize();
-                    camera.up.copy(upVec);
-                }
-                camera.lookAt(targetX, targetY, targetZ);
+                camera.position.copy(curCamPos);
+                camera.up.copy(curUpVec);
+                camera.lookAt(curTargetPos);
+                controls.target.copy(curTargetPos);
             } else {
                 controls.enabled = true;
-                controls.target.set(targetX, targetY, targetZ);
+                controls.target.copy(curTargetPos);
                 controls.update();
 
-                // Prevent dipping deep below water in free roaming mode
                 if (camera.position.y < -1.90) {
                     camera.position.y = -1.90;
                 }
             }
+
+            scrollProgress = (targetStageIndex === 1) ? 0.5 : (targetStageIndex === 2 ? 1.0 : 0.0);
         }
     }
 
-    // Update TV scene overlay opacity based on camera scene context (Active on Stage 2: TV view)
+    // Update TV scene overlay opacity based on camera stage (Active only on Stage 2: TV view)
     let tvOverlayOpacity = 0.0;
     if (isTVFocused) {
-        tvOverlayOpacity = 0.65; // Slightly transparent when fully focused
+        tvOverlayOpacity = 0.65;
     } else if (isCameraLocked) {
-        // Peaks at Stage 2 (scrollProgress = 0.5), fades out at Stage 1 (0.0) and Stage 3 (1.0)
-        tvOverlayOpacity = Math.max(0, 1.0 - Math.abs(scrollProgress - 0.5) / 0.20);
+        const isToTV = (targetStageIndex === 1);
+        const isFromTV = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2);
+        if (isToTV && !isFromTV) {
+            tvOverlayOpacity = stageTransition;
+        } else if (isFromTV && !isToTV) {
+            tvOverlayOpacity = 1.0 - stageTransition;
+        } else if (isToTV && isFromTV) {
+            tvOverlayOpacity = 1.0;
+        } else {
+            tvOverlayOpacity = 0.0;
+        }
     } else {
-        // Free roaming camera mode: base visibility on camera target Y level
         const targetY = controls ? controls.target.y : camera.position.y;
         tvOverlayOpacity = Math.max(0, Math.min(1, (5.0 - targetY) / 3.0));
     }
@@ -398,20 +360,16 @@ function animate() {
 
     if (isTVFocused) {
         distorsionaOpacity = 0.0;
-        comienzaOpacity = 0.0; // Disappears when centered/focused on screen
+        comienzaOpacity = 0.0;
     } else if (isCameraLocked) {
-        // Stage 1 (0.0): Distorsiona visible
-        // Stage 2 (0.5): Comienza la transmisión visible
-        // Stage 3 (1.0): Distorsiona visible sobre el monolito sumergido
-        if (scrollProgress <= 0.5) {
-            distorsionaOpacity = Math.max(0, 1.0 - (scrollProgress / 0.30));
-            comienzaOpacity = Math.max(0, (scrollProgress - 0.25) / 0.25);
-        } else {
-            comienzaOpacity = Math.max(0, 1.0 - ((scrollProgress - 0.5) / 0.25));
-            distorsionaOpacity = Math.max(0, ((scrollProgress - 0.75) / 0.25));
+        if (targetStageIndex === 1) { // TV Stage
+            comienzaOpacity = stageTransition;
+            distorsionaOpacity = 1.0 - stageTransition;
+        } else { // Monolith Stages
+            distorsionaOpacity = stageTransition;
+            comienzaOpacity = 1.0 - stageTransition;
         }
     } else {
-        // Free camera: cross-fade based on camera height target Y
         const targetY = controls ? controls.target.y : camera.position.y;
         distorsionaOpacity = Math.max(0, Math.min(1, (targetY - 5.5) / 4.0));
         comienzaOpacity = Math.max(0, Math.min(1, (7.5 - targetY) / 4.0));

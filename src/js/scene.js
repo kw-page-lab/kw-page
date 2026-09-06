@@ -218,16 +218,23 @@ function init() {
                 window.currentExitTargetY = tvCenterY + currentTvPitch;
                 
                 isCameraLocked = true;
-                targetScrollProgress = 0;
-                scrollProgress = 0;
+                targetStageIndex = 0;
+                toCamPos.copy(CAMERA_STAGES[0].cam);
+                toTargetPos.copy(CAMERA_STAGES[0].target);
+                toUpVec.copy(CAMERA_STAGES[0].up);
+                stageTransition = 1.0;
             } else {
-                targetScrollProgress = 0;
-                scrollProgress = 0;
+                targetStageIndex = 0;
+                toCamPos.copy(CAMERA_STAGES[0].cam);
+                toTargetPos.copy(CAMERA_STAGES[0].target);
+                toUpVec.copy(CAMERA_STAGES[0].up);
+                stageTransition = 1.0;
                 isCameraLocked = true;
                 
-                camera.position.set(0, 15.0, 10);
-                controls.target.set(0, 15.0, 0);
-                controls.enableZoom = false;
+                camera.position.copy(CAMERA_STAGES[0].cam);
+                camera.up.copy(CAMERA_STAGES[0].up);
+                camera.lookAt(CAMERA_STAGES[0].target);
+                controls.target.copy(CAMERA_STAGES[0].target);
             }
         });
     }

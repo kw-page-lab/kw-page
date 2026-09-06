@@ -1,3 +1,54 @@
+const CAMERA_STAGES = [
+    {
+        name: "monolith_aerial",
+        cam: new THREE.Vector3(0.0, 8.5, -9.0),
+        target: new THREE.Vector3(0.0, -2.1, -9.0),
+        up: new THREE.Vector3(0.0, 0.0, -1.0),
+        isTV: false
+    },
+    {
+        name: "tv_aerial",
+        cam: new THREE.Vector3(0.0, 8.5, 9.5),
+        target: new THREE.Vector3(0.0, -2.5, 9.5),
+        up: new THREE.Vector3(0.0, 0.0, -1.0),
+        isTV: true
+    },
+    {
+        name: "monolith_submerged_side",
+        cam: new THREE.Vector3(7.2, -1.70, -5.8),
+        target: new THREE.Vector3(0.0, -0.6, -9.0),
+        up: new THREE.Vector3(0.0, 1.0, 0.0),
+        isTV: false
+    }
+];
+
+let currentStageIndex = 0;
+let targetStageIndex = 0;
+let stageTransition = 1.0;
+let fromCamPos = CAMERA_STAGES[0].cam.clone();
+let toCamPos = CAMERA_STAGES[0].cam.clone();
+let fromTargetPos = CAMERA_STAGES[0].target.clone();
+let toTargetPos = CAMERA_STAGES[0].target.clone();
+let fromUpVec = CAMERA_STAGES[0].up.clone();
+let toUpVec = CAMERA_STAGES[0].up.clone();
+
+function advanceCameraStage() {
+    if (!isCameraLocked || isTVFocused || isExitingTV) return;
+    if (stageTransition < 0.6) return; // Prevent spamming while actively animating
+
+    fromCamPos.copy(camera.position);
+    fromTargetPos.copy(controls ? controls.target : CAMERA_STAGES[targetStageIndex].target);
+    fromUpVec.copy(camera.up);
+
+    targetStageIndex = (targetStageIndex + 1) % 3;
+    toCamPos.copy(CAMERA_STAGES[targetStageIndex].cam);
+    toTargetPos.copy(CAMERA_STAGES[targetStageIndex].target);
+    toUpVec.copy(CAMERA_STAGES[targetStageIndex].up);
+
+    stageTransition = 0.0;
+    console.log(`[Camera Stage] Advanced to Stage ${targetStageIndex + 1}: ${CAMERA_STAGES[targetStageIndex].name}`);
+}
+
 let scrollProgress = 0;
 let targetScrollProgress = 0;
 let touchStartYScope = 0;

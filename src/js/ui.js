@@ -316,21 +316,8 @@ function setupUIEventListeners() {
             return;
         }
         if (!isCameraLocked) return;
-        // Ignore scroll wheels if a scroll transition or exit focus is currently active to prevent interruption
-        if (Math.abs(scrollProgress - targetScrollProgress) > 0.005 || isExitingTV) return;
-        if (e.deltaY > 0) {
-            if (targetScrollProgress < 0.25) {
-                targetScrollProgress = 0.5;
-            } else {
-                targetScrollProgress = 1.0;
-            }
-        } else if (e.deltaY < 0) {
-            if (targetScrollProgress > 0.75) {
-                targetScrollProgress = 0.5;
-            } else {
-                targetScrollProgress = 0.0;
-            }
-        }
+        // Any wheel scroll event advances cyclically: 1 -> 2 -> 3 -> 1 -> 2 -> 3...
+        advanceCameraStage();
     }, { passive: true });
 
     // Touch drag support for mobile devices to snap transition
@@ -387,24 +374,12 @@ function setupUIEventListeners() {
             return;
         }
         if (!isCameraLocked) return;
-        // Ignore touch-swipe transitions if one is currently active
-        if (Math.abs(scrollProgress - targetScrollProgress) > 0.005 || isExitingTV) return;
         if (e.touches.length === 1) {
             const touchY = e.touches[0].pageY;
             const deltaY = touchStartYLocal - touchY;
-            // Trigger snap only on deliberate drag movements
-            if (deltaY > 15) {
-                if (targetScrollProgress < 0.25) {
-                    targetScrollProgress = 0.5;
-                } else {
-                    targetScrollProgress = 1.0;
-                }
-            } else if (deltaY < -15) {
-                if (targetScrollProgress > 0.75) {
-                    targetScrollProgress = 0.5;
-                } else {
-                    targetScrollProgress = 0.0;
-                }
+            if (Math.abs(deltaY) > 15) {
+                touchStartYLocal = touchY;
+                advanceCameraStage();
             }
         }
     }, { passive: true });
