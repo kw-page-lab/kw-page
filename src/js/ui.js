@@ -319,9 +319,17 @@ function setupUIEventListeners() {
         // Ignore scroll wheels if a scroll transition or exit focus is currently active to prevent interruption
         if (Math.abs(scrollProgress - targetScrollProgress) > 0.005 || isExitingTV) return;
         if (e.deltaY > 0) {
-            targetScrollProgress = 1; // Snap down
+            if (targetScrollProgress < 0.25) {
+                targetScrollProgress = 0.5;
+            } else {
+                targetScrollProgress = 1.0;
+            }
         } else if (e.deltaY < 0) {
-            targetScrollProgress = 0; // Snap up
+            if (targetScrollProgress > 0.75) {
+                targetScrollProgress = 0.5;
+            } else {
+                targetScrollProgress = 0.0;
+            }
         }
     }, { passive: true });
 
@@ -386,9 +394,17 @@ function setupUIEventListeners() {
             const deltaY = touchStartYLocal - touchY;
             // Trigger snap only on deliberate drag movements
             if (deltaY > 15) {
-                targetScrollProgress = 1; // Snap down
+                if (targetScrollProgress < 0.25) {
+                    targetScrollProgress = 0.5;
+                } else {
+                    targetScrollProgress = 1.0;
+                }
             } else if (deltaY < -15) {
-                targetScrollProgress = 0; // Snap up
+                if (targetScrollProgress > 0.75) {
+                    targetScrollProgress = 0.5;
+                } else {
+                    targetScrollProgress = 0.0;
+                }
             }
         }
     }, { passive: true });

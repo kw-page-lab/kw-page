@@ -259,10 +259,12 @@ function init() {
                 isCameraLocked = !isCameraLocked;
                 if (isCameraLocked) {
                     // Snap back to nearest state
-                    if (scrollProgress > 0.5) {
-                        targetScrollProgress = 1;
+                    if (scrollProgress > 0.75) {
+                        targetScrollProgress = 1.0;
+                    } else if (scrollProgress > 0.25) {
+                        targetScrollProgress = 0.5;
                     } else {
-                        targetScrollProgress = 0;
+                        targetScrollProgress = 0.0;
                     }
                 }
                 updateCameraLockUI();

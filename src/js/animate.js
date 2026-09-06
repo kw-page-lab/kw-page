@@ -293,33 +293,64 @@ function animate() {
                 }
             }
         } else {
-            // Smoothly interpolate scroll progress for camera positioning
+            // Smoothly interpolate scroll progress for camera positioning (3-stage progression)
             scrollProgress = THREE.MathUtils.lerp(scrollProgress, targetScrollProgress, 0.045);
 
-            // Monolith target (scroll = 0): (0, -2.1, -9.0)
-            // TV target (scroll = 1): (0, -2.5, 9.5) — centered directly on the TV
-            const targetX = 0.0;
-            const targetY = THREE.MathUtils.lerp(-2.1, -2.5, scrollProgress);
-            const targetZ = THREE.MathUtils.lerp(-9.0, 9.5, scrollProgress);
+            let targetX = 0.0, targetY = -2.1, targetZ = -9.0;
+            let camX = 0.0, camY = 8.5, camZ = -9.0;
+            let upY = 0.0, upZ = -1.0;
+
+            if (scrollProgress <= 0.5) {
+                // Interpolate from State 1 (Monolito Aéreo) to State 2 (Monolito Sumergido / Rasante Agua & Cielo)
+                const t = scrollProgress / 0.5;
+                // State 1: cam=(0, 8.5, -9.0), target=(0, -2.1, -9.0), up=(0, 0, -1)
+                // State 2: cam=(0, -1.82, -4.6), target=(0, 0.6, -9.0), up=(0, 1, 0)
+                camX = 0.0;
+                camY = THREE.MathUtils.lerp(8.5, -1.82, t);
+                camZ = THREE.MathUtils.lerp(-9.0, -4.6, t);
+
+                targetX = 0.0;
+                targetY = THREE.MathUtils.lerp(-2.1, 0.6, t);
+                targetZ = THREE.MathUtils.lerp(-9.0, -9.0, t);
+
+                upY = THREE.MathUtils.lerp(0.0, 1.0, t);
+                upZ = THREE.MathUtils.lerp(-1.0, 0.0, t);
+            } else {
+                // Interpolate from State 2 (Monolito Sumergido / Rasante) to State 3 (TV CRT Aéreo)
+                const t = (scrollProgress - 0.5) / 0.5;
+                // State 2: cam=(0, -1.82, -4.6), target=(0, 0.6, -9.0), up=(0, 1, 0)
+                // State 3: cam=(0, 8.5, 9.5), target=(0, -2.5, 9.5), up=(0, 0, -1)
+                camX = 0.0;
+                camY = THREE.MathUtils.lerp(-1.82, 8.5, t);
+                camZ = THREE.MathUtils.lerp(-4.6, 9.5, t);
+
+                targetX = 0.0;
+                targetY = THREE.MathUtils.lerp(0.6, -2.5, t);
+                targetZ = THREE.MathUtils.lerp(-9.0, 9.5, t);
+
+                upY = THREE.MathUtils.lerp(1.0, 0.0, t);
+                upZ = THREE.MathUtils.lerp(0.0, -1.0, t);
+            }
 
             controls.target.set(targetX, targetY, targetZ);
             
-            // Symmetrical high aerial vantage point (height Y = 8.5) looking straight down on both objects
             if (isCameraLocked) {
-                // Overhead flight: cam at (0, 8.5, -9.0) when scroll=0 -> (0, 8.5, 9.5) when scroll=1
-                const camY = 8.5;
-                const camZ = THREE.MathUtils.lerp(-9.0, 9.5, scrollProgress);
                 camera.position.x = 0.0;
                 camera.position.y = THREE.MathUtils.lerp(camera.position.y, camY, 0.06);
                 camera.position.z = THREE.MathUtils.lerp(camera.position.z, camZ, 0.06);
-                camera.up.set(0, 0, -1);
+
+                const upVec = new THREE.Vector3(0, upY, upZ);
+                if (upVec.lengthSq() > 0.001) {
+                    upVec.normalize();
+                    camera.up.copy(upVec);
+                }
             }
 
             controls.update();
 
-            // Strict underwater view prevention: keep camera safely above the water plane
-            if (controls.enabled && camera.position.y < -1.15) {
-                camera.position.y = -1.15;
+            // Strict underwater view prevention in free roaming orbit mode
+            if (!isCameraLocked && controls.enabled && camera.position.y < -1.90) {
+                camera.position.y = -1.90;
             }
         }
     }
@@ -370,9 +401,9 @@ function animate() {
         distorsionaOpacity = 0.0;
         comienzaOpacity = 0.0; // Disappears when centered/focused on screen
     } else if (isCameraLocked) {
-        // Cross-fade smoothly between scrollProgress 0.35 and 0.65
-        distorsionaOpacity = Math.max(0, Math.min(1, (0.55 - scrollProgress) / 0.2));
-        comienzaOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.45) / 0.2));
+        // Cross-fade smoothly during transition to TV (State 3)
+        distorsionaOpacity = Math.max(0, Math.min(1, (0.70 - scrollProgress) / 0.2));
+        comienzaOpacity = Math.max(0, Math.min(1, (scrollProgress - 0.65) / 0.2));
     } else {
         // Free camera: cross-fade based on camera height target Y
         const targetY = controls ? controls.target.y : camera.position.y;
