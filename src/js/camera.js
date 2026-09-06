@@ -15,8 +15,8 @@ const CAMERA_STAGES = [
     },
     {
         name: "monolith_submerged_side",
-        cam: new THREE.Vector3(7.2, -1.70, -5.8),
-        target: new THREE.Vector3(0.0, -0.6, -9.0),
+        cam: new THREE.Vector3(7.2, -1.38, -5.8),
+        target: new THREE.Vector3(0.0, -0.45, -9.0),
         up: new THREE.Vector3(0.0, 1.0, 0.0),
         isTV: false
     }
