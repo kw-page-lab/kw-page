@@ -354,20 +354,31 @@ function animate() {
         }
     }
 
-    // Update dual tagline text transitions based on camera scrolling context
+    // Update 3-way tagline text transitions based on active camera stage
     let distorsionaOpacity = 0.0;
     let comienzaOpacity = 0.0;
+    let sumergidoOpacity = 0.0;
 
     if (isTVFocused) {
         distorsionaOpacity = 0.0;
         comienzaOpacity = 0.0;
+        sumergidoOpacity = 0.0;
     } else if (isCameraLocked) {
-        if (targetStageIndex === 1) { // TV Stage
-            comienzaOpacity = stageTransition;
-            distorsionaOpacity = 1.0 - stageTransition;
-        } else { // Monolith Stages
+        if (targetStageIndex === 0) {
+            // Stage 1 (Monolith Aerial): tagline 1
             distorsionaOpacity = stageTransition;
-            comienzaOpacity = 1.0 - stageTransition;
+            comienzaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+            sumergidoOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[2].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+        } else if (targetStageIndex === 1) {
+            // Stage 2 (TV CRT): tagline 2
+            comienzaOpacity = stageTransition;
+            distorsionaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[0].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+            sumergidoOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[2].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+        } else if (targetStageIndex === 2) {
+            // Stage 3 (Monolith Submerged): tagline 3
+            sumergidoOpacity = stageTransition;
+            comienzaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+            distorsionaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[0].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
         }
     } else {
         const targetY = controls ? controls.target.y : camera.position.y;
@@ -377,8 +388,10 @@ function animate() {
 
     const distEl = document.getElementById('tagline-distorsiona');
     const comEl = document.getElementById('tagline-comienza');
+    const sumEl = document.getElementById('tagline-sumergido');
     if (distEl) distEl.style.opacity = distorsionaOpacity;
     if (comEl) comEl.style.opacity = comienzaOpacity;
+    if (sumEl) sumEl.style.opacity = sumergidoOpacity;
 
     // Liquid floor: update time and sun direction uniforms
     if (liquidFloor && liquidFloor.visible) {

@@ -789,7 +789,7 @@
                 else d = await decrypt(event.data);
                 if (!d) return;
 
-                // ── Dynamic tagline updates ──
+                // ── Dynamic tagline updates (3-way taglines) ──
                 if (d.tagline1 !== undefined) {
                     const el = document.getElementById('tagline-distorsiona');
                     if (el) el.innerText = d.tagline1;
@@ -797,6 +797,10 @@
                 if (d.tagline2 !== undefined) {
                     const el = document.getElementById('tagline-comienza');
                     if (el) el.innerText = d.tagline2;
+                }
+                if (d.tagline3 !== undefined) {
+                    const el = document.getElementById('tagline-sumergido');
+                    if (el) el.innerText = d.tagline3;
                 }
 
                 if (d.type === 'apply_preset' || d.type === 'trigger_video') {
