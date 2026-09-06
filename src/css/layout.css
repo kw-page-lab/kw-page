@@ -186,13 +186,11 @@ canvas {
 .topbar,
 .control-panel,
 .sidebar-panel,
-.top-tagline-container,
 .social-action-btn,
 .camera-lock-btn,
 .round-action-btn,
-.tv-overlay-container,
 .vignette-overlay {
-    transition: filter 1.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.5s ease-in-out, background 1.5s ease-in-out;
+    transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease-in-out;
 }
 
 /* Act 1 transition overlay / styling */

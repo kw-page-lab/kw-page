@@ -281,8 +281,8 @@ function animate() {
                 camera.lookAt(0, -2.5, 9.5);
             }
         } else {
-            // Smoothly interpolate stage transition (Snappy & silky 60fps response)
-            stageTransition = THREE.MathUtils.lerp(stageTransition, 1.0, 0.068);
+            // Smoothly interpolate stage transition (Fast, crisp & silky 60fps response)
+            stageTransition = THREE.MathUtils.lerp(stageTransition, 1.0, 0.085);
             const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
 
             const curCamPos = fromCamPos.clone().lerp(toCamPos, t);
@@ -310,20 +310,23 @@ function animate() {
         }
     }
 
-    // Update TV scene overlay opacity (Deterministic: Stage 2 / TV view only)
+    // Update TV scene overlay & Logo opacity (Visible in Stage 2 [TV] and Stage 3 [Monolith Submerged], Hidden in Stage 1)
     const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
+    const fromHasOverlay = (fromStageIndex === 1 || fromStageIndex === 2);
+    const toHasOverlay = (targetStageIndex === 1 || targetStageIndex === 2);
     let tvOverlayOpacity = 0.0;
+
     if (isTVFocused) {
         tvOverlayOpacity = 0.65;
     } else if (isCameraLocked) {
-        if (targetStageIndex === 1 && fromStageIndex === 1) {
-            tvOverlayOpacity = 1.0;
-        } else if (targetStageIndex === 1) {
-            tvOverlayOpacity = t; // Smoothly fades IN to TV
-        } else if (fromStageIndex === 1) {
-            tvOverlayOpacity = 1.0 - t; // Smoothly fades OUT from TV
+        if (fromHasOverlay && toHasOverlay) {
+            tvOverlayOpacity = 1.0; // Stays fully visible between Stage 2 and Stage 3!
+        } else if (!fromHasOverlay && toHasOverlay) {
+            tvOverlayOpacity = t;   // Transitions 0.0 -> 1.0 entering Stage 2
+        } else if (fromHasOverlay && !toHasOverlay) {
+            tvOverlayOpacity = 1.0 - t; // Transitions 1.0 -> 0.0 returning to Stage 1
         } else {
-            tvOverlayOpacity = 0.0;
+            tvOverlayOpacity = 0.0; // Stage 1 (Hidden)
         }
     } else {
         const targetY = controls ? controls.target.y : camera.position.y;
@@ -340,11 +343,26 @@ function animate() {
         }
     }
 
-    // Update Neobrutalism TV Side Carousel opacity and smooth glide
+    // Neobrutalism TV Side Carousel: active only on Stage 2 (TV view)
+    let nbCarouselOpacity = 0.0;
+    if (isCameraLocked) {
+        if (targetStageIndex === 1 && fromStageIndex === 1) {
+            nbCarouselOpacity = 1.0;
+        } else if (targetStageIndex === 1) {
+            nbCarouselOpacity = t;
+        } else if (fromStageIndex === 1) {
+            nbCarouselOpacity = 1.0 - t;
+        } else {
+            nbCarouselOpacity = 0.0;
+        }
+    } else {
+        nbCarouselOpacity = tvOverlayOpacity;
+    }
+
     const nbCarouselEl = document.getElementById('neobrutalism-tv-carousel-container');
     if (nbCarouselEl) {
-        nbCarouselEl.style.opacity = tvOverlayOpacity;
-        if (tvOverlayOpacity > 0.05) {
+        nbCarouselEl.style.opacity = nbCarouselOpacity;
+        if (nbCarouselOpacity > 0.05) {
             nbCarouselEl.style.pointerEvents = 'auto';
             nbCarouselEl.classList.add('is-tv-visible');
         } else {
