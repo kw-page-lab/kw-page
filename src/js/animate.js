@@ -310,23 +310,21 @@ function animate() {
         }
     }
 
-    // Update TV scene overlay & Logo opacity (Visible in Stage 2 [TV] and Stage 3 [Monolith Submerged], Hidden in Stage 1)
+    // Update TV scene overlay & Logo opacity (Visible ONLY in Stage 2 [TV], Hidden in Stage 1 and Stage 3)
     const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
-    const fromHasOverlay = (fromStageIndex === 1 || fromStageIndex === 2);
-    const toHasOverlay = (targetStageIndex === 1 || targetStageIndex === 2);
     let tvOverlayOpacity = 0.0;
 
     if (isTVFocused) {
         tvOverlayOpacity = 0.65;
     } else if (isCameraLocked) {
-        if (fromHasOverlay && toHasOverlay) {
-            tvOverlayOpacity = 1.0; // Stays fully visible between Stage 2 and Stage 3!
-        } else if (!fromHasOverlay && toHasOverlay) {
-            tvOverlayOpacity = t;   // Transitions 0.0 -> 1.0 entering Stage 2
-        } else if (fromHasOverlay && !toHasOverlay) {
-            tvOverlayOpacity = 1.0 - t; // Transitions 1.0 -> 0.0 returning to Stage 1
+        if (targetStageIndex === 1 && fromStageIndex === 1) {
+            tvOverlayOpacity = 1.0;
+        } else if (targetStageIndex === 1) {
+            tvOverlayOpacity = t; // Fades in when entering Stage 2 (TV)
+        } else if (fromStageIndex === 1) {
+            tvOverlayOpacity = 1.0 - t; // Fades out when leaving Stage 2 (TV)
         } else {
-            tvOverlayOpacity = 0.0; // Stage 1 (Hidden)
+            tvOverlayOpacity = 0.0; // Hidden in Stage 1 and Stage 3
         }
     } else {
         const targetY = controls ? controls.target.y : camera.position.y;
