@@ -67,7 +67,7 @@ canvas {
     letter-spacing: 3px;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.95);
     text-align: center;
-    transition: opacity 0.3s ease-in-out;
+    /* opacity managed by JS */
     white-space: nowrap;
 }
 
@@ -84,7 +84,7 @@ canvas {
     z-index: 8;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s ease-in-out;
+    /* opacity managed by JS */
     user-select: none;
 }
 

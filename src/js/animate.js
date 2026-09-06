@@ -281,8 +281,8 @@ function animate() {
                 camera.lookAt(0, -2.5, 9.5);
             }
         } else {
-            // Smoothly interpolate stage transition (Cyclical 1 -> 2 -> 3 -> 1 progression)
-            stageTransition = THREE.MathUtils.lerp(stageTransition, 1.0, 0.045);
+            // Smoothly interpolate stage transition (Snappy & silky 60fps response)
+            stageTransition = THREE.MathUtils.lerp(stageTransition, 1.0, 0.068);
             const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
 
             const curCamPos = fromCamPos.clone().lerp(toCamPos, t);
@@ -310,19 +310,18 @@ function animate() {
         }
     }
 
-    // Update TV scene overlay opacity based on camera stage (Active only on Stage 2: TV view)
+    // Update TV scene overlay opacity (Deterministic: Stage 2 / TV view only)
+    const t = THREE.MathUtils.smoothstep(stageTransition, 0.0, 1.0);
     let tvOverlayOpacity = 0.0;
     if (isTVFocused) {
         tvOverlayOpacity = 0.65;
     } else if (isCameraLocked) {
-        const isToTV = (targetStageIndex === 1);
-        const isFromTV = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2);
-        if (isToTV && !isFromTV) {
-            tvOverlayOpacity = stageTransition;
-        } else if (isFromTV && !isToTV) {
-            tvOverlayOpacity = 1.0 - stageTransition;
-        } else if (isToTV && isFromTV) {
+        if (targetStageIndex === 1 && fromStageIndex === 1) {
             tvOverlayOpacity = 1.0;
+        } else if (targetStageIndex === 1) {
+            tvOverlayOpacity = t; // Smoothly fades IN to TV
+        } else if (fromStageIndex === 1) {
+            tvOverlayOpacity = 1.0 - t; // Smoothly fades OUT from TV
         } else {
             tvOverlayOpacity = 0.0;
         }
@@ -354,7 +353,7 @@ function animate() {
         }
     }
 
-    // Update 3-way tagline text transitions based on active camera stage
+    // Update 3-way tagline text transitions with zero superposition guarantee
     let distorsionaOpacity = 0.0;
     let comienzaOpacity = 0.0;
     let sumergidoOpacity = 0.0;
@@ -364,21 +363,21 @@ function animate() {
         comienzaOpacity = 0.0;
         sumergidoOpacity = 0.0;
     } else if (isCameraLocked) {
-        if (targetStageIndex === 0) {
-            // Stage 1 (Monolith Aerial): tagline 1
-            distorsionaOpacity = stageTransition;
-            comienzaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
-            sumergidoOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[2].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
-        } else if (targetStageIndex === 1) {
-            // Stage 2 (TV CRT): tagline 2
-            comienzaOpacity = stageTransition;
-            distorsionaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[0].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
-            sumergidoOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[2].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
-        } else if (targetStageIndex === 2) {
-            // Stage 3 (Monolith Submerged): tagline 3
-            sumergidoOpacity = stageTransition;
-            comienzaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[1].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
-            distorsionaOpacity = (fromCamPos.distanceTo(CAMERA_STAGES[0].cam) < 0.2) ? (1.0 - stageTransition) : 0.0;
+        // Active incoming stage gets opacity t
+        if (targetStageIndex === 0) distorsionaOpacity = t;
+        else if (targetStageIndex === 1) comienzaOpacity = t;
+        else if (targetStageIndex === 2) sumergidoOpacity = t;
+
+        // Active outgoing stage gets opacity (1.0 - t)
+        if (fromStageIndex !== targetStageIndex) {
+            if (fromStageIndex === 0) distorsionaOpacity = 1.0 - t;
+            else if (fromStageIndex === 1) comienzaOpacity = 1.0 - t;
+            else if (fromStageIndex === 2) sumergidoOpacity = 1.0 - t;
+        } else {
+            // Already settled
+            if (targetStageIndex === 0) distorsionaOpacity = 1.0;
+            else if (targetStageIndex === 1) comienzaOpacity = 1.0;
+            else if (targetStageIndex === 2) sumergidoOpacity = 1.0;
         }
     } else {
         const targetY = controls ? controls.target.y : camera.position.y;

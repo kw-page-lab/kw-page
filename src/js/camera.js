@@ -23,6 +23,7 @@ const CAMERA_STAGES = [
 ];
 
 let currentStageIndex = 0;
+let fromStageIndex = 0;
 let targetStageIndex = 0;
 let stageTransition = 1.0;
 let fromCamPos = CAMERA_STAGES[0].cam.clone();
@@ -34,11 +35,12 @@ let toUpVec = CAMERA_STAGES[0].up.clone();
 
 function advanceCameraStage() {
     if (!isCameraLocked || isTVFocused || isExitingTV) return;
-    if (stageTransition < 0.6) return; // Prevent spamming while actively animating
+    if (stageTransition < 0.5) return; // Responsive & snappy transition trigger
 
     fromCamPos.copy(camera.position);
     fromTargetPos.copy(controls ? controls.target : CAMERA_STAGES[targetStageIndex].target);
     fromUpVec.copy(camera.up);
+    fromStageIndex = targetStageIndex;
 
     targetStageIndex = (targetStageIndex + 1) % 3;
     toCamPos.copy(CAMERA_STAGES[targetStageIndex].cam);
@@ -46,7 +48,7 @@ function advanceCameraStage() {
     toUpVec.copy(CAMERA_STAGES[targetStageIndex].up);
 
     stageTransition = 0.0;
-    console.log(`[Camera Stage] Advanced to Stage ${targetStageIndex + 1}: ${CAMERA_STAGES[targetStageIndex].name}`);
+    console.log(`[Camera Stage] Advanced from Stage ${fromStageIndex + 1} to Stage ${targetStageIndex + 1}: ${CAMERA_STAGES[targetStageIndex].name}`);
 }
 
 let scrollProgress = 0;
