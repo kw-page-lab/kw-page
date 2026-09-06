@@ -311,18 +311,19 @@ function animate() {
             } else {
                 // ============================================================
                 // STAGE 2 (scroll=0.5): TV CRT Aerial (0, 8.5, 9.5) ->
-                // STAGE 3 (scroll=1.0): NEW Submerged Monolith Waterline View
-                //   Camera placed skimming water level (Y = -1.78, Z = -3.2)
-                //   Looking UPWARDS (pitch +28 deg) into the sky & sinking monolith (target Y = 1.4, Z = -9.0)
-                //   Orientation: camera.up = (0, 1, 0) (UPRIGHT CINEMATIC, NOT AERIAL)
+                // STAGE 3 (scroll=1.0): Submerged Monolith Long Side Waterline View
+                //   Camera positioned on the side/flank (X = 3.6, Y = -1.75, Z = -6.8)
+                //   Viewing the full long side and logo of the monolith sinking into water
+                //   Looking slightly UP towards (0.0, 0.4, -9.0) into the dramatic sky
+                //   Orientation: camera.up = (0, 1, 0) (UPRIGHT CINEMATIC)
                 // ============================================================
                 const t = (scrollProgress - 0.5) / 0.5;
-                camX = 0.0;
-                camY = THREE.MathUtils.lerp(8.5, -1.78, t);
-                camZ = THREE.MathUtils.lerp(9.5, -3.2, t);
+                camX = THREE.MathUtils.lerp(0.0, 3.6, t);
+                camY = THREE.MathUtils.lerp(8.5, -1.75, t);
+                camZ = THREE.MathUtils.lerp(9.5, -6.8, t);
 
                 targetX = 0.0;
-                targetY = THREE.MathUtils.lerp(-2.5, 1.4, t);
+                targetY = THREE.MathUtils.lerp(-2.5, 0.4, t);
                 targetZ = THREE.MathUtils.lerp(9.5, -9.0, t);
 
                 upX = 0.0;
