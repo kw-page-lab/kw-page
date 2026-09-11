@@ -404,9 +404,24 @@ function animate() {
     const distEl = document.getElementById('tagline-distorsiona');
     const comEl = document.getElementById('tagline-comienza');
     const sumEl = document.getElementById('tagline-sumergido');
-    if (distEl) distEl.style.opacity = distorsionaOpacity;
-    if (comEl) comEl.style.opacity = comienzaOpacity;
-    if (sumEl) sumEl.style.opacity = sumergidoOpacity;
+
+    // Breathing: sin wave 0.12->1.0, period ~8s
+    const breathRaw = (Math.sin(now * 0.000785) + 1.0) * 0.5;
+    const breath = 0.12 + breathRaw * 0.88;
+
+    function applyTagline(el, baseOpacity) {
+        if (!el) return;
+        const finalOpacity = baseOpacity >= 0.98 ? breath : baseOpacity;
+        el.style.opacity = finalOpacity;
+        if (finalOpacity > 0.85) {
+            el.style.textShadow = '0 0 10px rgba(0,0,0,0.95), 0 0 40px rgba(180,240,255,0.95)';
+        } else {
+            el.style.textShadow = '0 0 10px rgba(0,0,0,0.95)';
+        }
+    }
+    applyTagline(distEl, distorsionaOpacity);
+    applyTagline(comEl, comienzaOpacity);
+    applyTagline(sumEl, sumergidoOpacity);
 
     // Liquid floor: update time and sun direction uniforms
     if (liquidFloor && liquidFloor.visible) {
