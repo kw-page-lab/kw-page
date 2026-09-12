@@ -405,19 +405,12 @@ function animate() {
     const comEl = document.getElementById('tagline-comienza');
     const sumEl = document.getElementById('tagline-sumergido');
 
-    // Breathing: sin wave 0.12->1.0, period ~8s
-    const breathRaw = (Math.sin(now * 0.000785) + 1.0) * 0.5;
-    const breath = 0.12 + breathRaw * 0.88;
-
     function applyTagline(el, baseOpacity) {
         if (!el) return;
-        const finalOpacity = baseOpacity >= 0.98 ? breath : baseOpacity;
-        el.style.opacity = finalOpacity;
-        if (finalOpacity > 0.85) {
-            el.style.textShadow = '0 0 10px rgba(0,0,0,0.95), 0 0 40px rgba(180,240,255,0.95)';
-        } else {
-            el.style.textShadow = '0 0 10px rgba(0,0,0,0.95)';
-        }
+        // Solo cambia de opacidad gradualmente durante la transicion entre stages (baseOpacity de 0 a 1)
+        // Se elimino el parpadeo de respiracion y el resplandor pulsante
+        el.style.opacity = baseOpacity;
+        el.style.textShadow = '0 0 10px rgba(0,0,0,0.95)';
     }
     applyTagline(distEl, distorsionaOpacity);
     applyTagline(comEl, comienzaOpacity);
