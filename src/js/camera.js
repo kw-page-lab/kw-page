@@ -33,9 +33,16 @@ let toTargetPos = CAMERA_STAGES[0].target.clone();
 let fromUpVec = CAMERA_STAGES[0].up.clone();
 let toUpVec = CAMERA_STAGES[0].up.clone();
 
+let lastStageAdvanceTime = 0;
+const STAGE_TRANSITION_COOLDOWN_MS = 2500; // Bloquea cambiar de vista sin pasar al menos 2.5s
+
 function advanceCameraStage() {
     if (!isCameraLocked || isTVFocused || isExitingTV) return;
-    if (stageTransition < 0.5) return; // Responsive & snappy transition trigger
+    const now = Date.now();
+    if (now - lastStageAdvanceTime < STAGE_TRANSITION_COOLDOWN_MS) {
+        return; // Ignora scrolls acelerados para permitir apreciar la vista actual
+    }
+    if (stageTransition < 0.9) return; // Espera a que la animacion este prácticamente completa
 
     fromCamPos.copy(camera.position);
     fromTargetPos.copy(controls ? controls.target : CAMERA_STAGES[targetStageIndex].target);
@@ -48,6 +55,7 @@ function advanceCameraStage() {
     toUpVec.copy(CAMERA_STAGES[targetStageIndex].up);
 
     stageTransition = 0.0;
+    lastStageAdvanceTime = Date.now();
     console.log(`[Camera Stage] Advanced from Stage ${fromStageIndex + 1} to Stage ${targetStageIndex + 1}: ${CAMERA_STAGES[targetStageIndex].name}`);
 }
 
