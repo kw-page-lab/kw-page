@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.3f3fbd54.css",
-    "main.js": "/static/js/main.110be997.js",
+    "main.js": "/static/js/main.a0c9a5b0.js",
     "static/js/453.25bd5429.chunk.js": "/static/js/453.25bd5429.chunk.js",
     "static/media/webpage_background.jpg": "/static/media/webpage_background.b8a4982d61e6054cfd51.jpg",
     "static/media/TELEVISOR 1.png": "/static/media/TELEVISOR 1.7e0c43de383743c1acb6.png",
@@ -16,11 +16,11 @@
     "static/media/Kimeracreatura.png": "/static/media/Kimeracreatura.fdc0c7ddae225e112679.png",
     "index.html": "/index.html",
     "main.3f3fbd54.css.map": "/static/css/main.3f3fbd54.css.map",
-    "main.110be997.js.map": "/static/js/main.110be997.js.map",
+    "main.a0c9a5b0.js.map": "/static/js/main.a0c9a5b0.js.map",
     "453.25bd5429.chunk.js.map": "/static/js/453.25bd5429.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.3f3fbd54.css",
-    "static/js/main.110be997.js"
+    "static/js/main.a0c9a5b0.js"
   ]
 }
