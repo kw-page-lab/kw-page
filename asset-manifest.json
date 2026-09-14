@@ -1,0 +1,26 @@
+{
+  "files": {
+    "main.css": "/static/css/main.3f3fbd54.css",
+    "main.js": "/static/js/main.110be997.js",
+    "static/js/453.25bd5429.chunk.js": "/static/js/453.25bd5429.chunk.js",
+    "static/media/webpage_background.jpg": "/static/media/webpage_background.b8a4982d61e6054cfd51.jpg",
+    "static/media/TELEVISOR 1.png": "/static/media/TELEVISOR 1.7e0c43de383743c1acb6.png",
+    "static/media/CATERVA_OD.jpg": "/static/media/CATERVA_OD.3ba5d57bc059ed422c04.jpg",
+    "static/media/Bungee-Regular.ttf": "/static/media/Bungee-Regular.d3ffe044080003b18793.ttf",
+    "static/media/COMING SOON.png": "/static/media/COMING SOON.674626f83ea9b6eb56a0.png",
+    "static/media/SanMartin_ES.webp": "/static/media/SanMartin_ES.62b4f6c83fca9f3d0124.webp",
+    "static/media/SanMartin_ENG.webp": "/static/media/SanMartin_ENG.81f28e5640e7c4d1855c.webp",
+    "static/media/SyneMono-Regular.ttf": "/static/media/SyneMono-Regular.5c1680d9ccae89d668ab.ttf",
+    "static/media/Rectangulos_KW.png": "/static/media/Rectangulos_KW.ece9730ef839a6cb35ce.png",
+    "static/media/KimeraWare_logo.png": "/static/media/KimeraWare_logo.46247f46b89cc0d01530.png",
+    "static/media/Kimeracreatura.png": "/static/media/Kimeracreatura.fdc0c7ddae225e112679.png",
+    "index.html": "/index.html",
+    "main.3f3fbd54.css.map": "/static/css/main.3f3fbd54.css.map",
+    "main.110be997.js.map": "/static/js/main.110be997.js.map",
+    "453.25bd5429.chunk.js.map": "/static/js/453.25bd5429.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3f3fbd54.css",
+    "static/js/main.110be997.js"
+  ]
+}
