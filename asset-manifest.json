@@ -1,18 +1,20 @@
 {
   "files": {
     "main.css": "/static/css/main.c0374a06.css",
-    "main.js": "/static/js/main.020ccf3b.js",
+    "main.js": "/static/js/main.5d2833fb.js",
     "static/js/453.0a6336d4.chunk.js": "/static/js/453.0a6336d4.chunk.js",
-    "static/media/tumama.mp4": "/static/media/tumama.53fb82674b71444b39d6.mp4",
+    "static/media/zebitas.mp4": "/static/media/zebitas.53fb82674b71444b39d6.mp4",
     "static/media/san_martin_trailer.mp4": "/static/media/san_martin_trailer.36dfe513836e243340de.mp4",
     "static/media/caterva_trailer.mp4": "/static/media/caterva_trailer.b19f28b5948e24f147f2.mp4",
     "static/media/static.mp4": "/static/media/static.11d47873c8300afb0c1d.mp4",
+    "static/media/tumama.mp4": "/static/media/tumama.5c4753ed63367b653b69.mp4",
     "static/media/webpage_background.png": "/static/media/webpage_background.dd3dbe5acfba31c782e6.png",
     "static/media/gif_3.gif": "/static/media/gif_3.583b5ccea280aa1b6762.gif",
     "static/media/proyecto_convertir_a_gif_-_28_de_julio_.gif": "/static/media/proyecto_convertir_a_gif_-_28_de_julio_.5ccbe416490698d86a41.gif",
     "static/media/gif_2.gif": "/static/media/gif_2.f05d6d48226054c0cdb9.gif",
     "static/media/millo_trim.gif": "/static/media/millo_trim.7c53ab9ca247b505de9e.gif",
     "static/media/2026-07-20_02-33-24__1_.gif": "/static/media/2026-07-20_02-33-24__1_.04727b30594312bed1cc.gif",
+    "static/media/homelo.mp4": "/static/media/homelo.05cd5fca00ca3d1f9e47.mp4",
     "static/media/control01.gif": "/static/media/control01.d8a1d08a22315af35a15.gif",
     "static/media/kimeraware_televisor.png": "/static/media/kimeraware_televisor.4c81b0f759ff9f9aee1c.png",
     "static/media/paula_pfp.png": "/static/media/paula_pfp.fb8f78b1af7476529f9c.png",
@@ -56,11 +58,11 @@
     "static/media/imagen_2.png": "/static/media/imagen_2.354705f32dfb7d37f71f.png",
     "index.html": "/index.html",
     "main.c0374a06.css.map": "/static/css/main.c0374a06.css.map",
-    "main.020ccf3b.js.map": "/static/js/main.020ccf3b.js.map",
+    "main.5d2833fb.js.map": "/static/js/main.5d2833fb.js.map",
     "453.0a6336d4.chunk.js.map": "/static/js/453.0a6336d4.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.c0374a06.css",
-    "static/js/main.020ccf3b.js"
+    "static/js/main.5d2833fb.js"
   ]
 }
