@@ -5,19 +5,19 @@
     <title>KimeraWare</title>
     <script>
       const pathSegmentsToKeep = 0;
-      const location = window.location;
-      const redirect = location.href.split('?')[0].split('#')[0];
-      const segments = location.pathname.slice(1).split('/');
+      const currentLoc = window.location;
+      const redirect = currentLoc.href.split('?')[0].split('#')[0];
+      const segments = currentLoc.pathname.slice(1).split('/');
       
       location.replace(
-        location.protocol + '//' + location.hostname + 
-        (location.port ? ':' + location.port : '') +
+        currentLoc.protocol + '//' + currentLoc.hostname +
+        (currentLoc.port ? ':' + currentLoc.port : '') +
         '/' +
-        (segments.length > pathSegmentsToKeep 
+        (segments.length > pathSegmentsToKeep
           ? '?p=/' + segments.slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~')
           : '') +
-        (location.search ? '&q=' + location.search.slice(1).replace(/&/g, '~and~') : '') +
-        location.hash
+        (currentLoc.search ? '&q=' + currentLoc.search.slice(1).replace(/&/g, '~and~') : '') +
+        currentLoc.hash
       );
     </script>
   </head>
