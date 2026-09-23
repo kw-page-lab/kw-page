@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.c0374a06.css",
-    "main.js": "/static/js/main.a84327ed.js",
+    "main.js": "/static/js/main.a147b700.js",
     "static/js/453.0a6336d4.chunk.js": "/static/js/453.0a6336d4.chunk.js",
     "static/media/tumama.mp4": "/static/media/tumama.53fb82674b71444b39d6.mp4",
     "static/media/san_martin_trailer.mp4": "/static/media/san_martin_trailer.36dfe513836e243340de.mp4",
@@ -56,11 +56,11 @@
     "static/media/imagen_2.png": "/static/media/imagen_2.354705f32dfb7d37f71f.png",
     "index.html": "/index.html",
     "main.c0374a06.css.map": "/static/css/main.c0374a06.css.map",
-    "main.a84327ed.js.map": "/static/js/main.a84327ed.js.map",
+    "main.a147b700.js.map": "/static/js/main.a147b700.js.map",
     "453.0a6336d4.chunk.js.map": "/static/js/453.0a6336d4.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.c0374a06.css",
-    "static/js/main.a84327ed.js"
+    "static/js/main.a147b700.js"
   ]
 }
