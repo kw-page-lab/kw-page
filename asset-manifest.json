@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.c0374a06.css",
-    "main.js": "/static/js/main.5d2833fb.js",
+    "main.js": "/static/js/main.c942166c.js",
     "static/js/453.0a6336d4.chunk.js": "/static/js/453.0a6336d4.chunk.js",
     "static/media/zebitas.mp4": "/static/media/zebitas.53fb82674b71444b39d6.mp4",
     "static/media/san_martin_trailer.mp4": "/static/media/san_martin_trailer.36dfe513836e243340de.mp4",
@@ -58,11 +58,11 @@
     "static/media/imagen_2.png": "/static/media/imagen_2.354705f32dfb7d37f71f.png",
     "index.html": "/index.html",
     "main.c0374a06.css.map": "/static/css/main.c0374a06.css.map",
-    "main.5d2833fb.js.map": "/static/js/main.5d2833fb.js.map",
+    "main.c942166c.js.map": "/static/js/main.c942166c.js.map",
     "453.0a6336d4.chunk.js.map": "/static/js/453.0a6336d4.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.c0374a06.css",
-    "static/js/main.5d2833fb.js"
+    "static/js/main.c942166c.js"
   ]
 }
